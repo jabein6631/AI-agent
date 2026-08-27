@@ -55,9 +55,18 @@ IMAGES_DIR = BASE_DIR / "images"
 
 # Model Checkpoints & Configs
 SAM2_CHECKPOINT = BASE_DIR / "sam2.1_hiera_tiny.pt"
+if not SAM2_CHECKPOINT.exists():
+    _fallback_sam2 = Path(r"C:\Users\Lenovo\Downloads\analyze\Grounded-SAM-2-main\sam2.1_hiera_tiny.pt")
+    if _fallback_sam2.exists():
+        SAM2_CHECKPOINT = _fallback_sam2
+
 SAM2_MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_t.yaml"
 GROUNDING_DINO_CONFIG = BASE_DIR / "grounding_dino" / "groundingdino" / "config" / "GroundingDINO_SwinT_OGC.py"
 GROUNDING_DINO_CHECKPOINT = BASE_DIR / "gdino_checkpoints" / "groundingdino_swint_ogc.pth"
+if not GROUNDING_DINO_CHECKPOINT.exists():
+    _fallback_gdino = Path(r"C:\Users\Lenovo\Downloads\analyze\Grounded-SAM-2-main\gdino_checkpoints\groundingdino_swint_ogc.pth")
+    if _fallback_gdino.exists():
+        GROUNDING_DINO_CHECKPOINT = _fallback_gdino
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 

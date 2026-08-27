@@ -206,8 +206,8 @@
               </div>
             </div>
             <div class="stage-canvas-wrapper">
-              <img id="imgStage1" class="stage-preview-img" alt="Original Image"
-                src="/images/image.png" loading="eager" decoding="async">
+              <img id="imgStage1" class="stage-preview-img" alt="Original Image" src="/images/image.png" loading="eager"
+                decoding="async">
               <div class="live-scan-laser"></div>
               <div class="live-scan-grid"></div>
               <div class="hud-scan-status" id="hudStatusStage1">
@@ -221,8 +221,8 @@
                   id="metaFilename">image.png</span></div>
               <div class="meta-item"><span class="meta-k">RESOLUTION:</span> <span class="meta-v"
                   id="metaResolution">1920 × 1080</span></div>
-              <div class="meta-item"><span class="meta-k">FORMAT:</span> <span class="meta-v"
-                  id="metaFormat">PNG</span></div>
+              <div class="meta-item"><span class="meta-k">FORMAT:</span> <span class="meta-v" id="metaFormat">PNG</span>
+              </div>
               <div class="meta-item"><span class="meta-k">STATUS:</span> <span class="meta-v status-ok"
                   id="metaStatus">Loaded</span></div>
             </div>
@@ -245,8 +245,8 @@
               </div>
             </div>
             <div class="stage-canvas-wrapper">
-              <img id="imgStage2" class="stage-preview-img" alt="Scene Detection"
-                src="/images/image.png" loading="eager" decoding="async">
+              <img id="imgStage2" class="stage-preview-img" alt="Scene Detection" src="/images/image.png"
+                loading="eager" decoding="async">
               <div class="live-scan-laser"></div>
               <div class="live-scan-grid"></div>
               <div class="hud-scan-status" id="hudStatusStage2">
@@ -282,8 +282,8 @@
               </div>
             </div>
             <div class="stage-canvas-wrapper">
-              <img id="imgStage3" class="stage-preview-img" alt="Defect Bounding Boxes"
-                src="/images/image.png" loading="eager" decoding="async">
+              <img id="imgStage3" class="stage-preview-img" alt="Defect Bounding Boxes" src="/images/image.png"
+                loading="eager" decoding="async">
               <div class="live-scan-laser"></div>
               <div class="live-scan-grid"></div>
               <div class="hud-scan-status" id="hudStatusStage3">
@@ -320,8 +320,8 @@
               </div>
             </div>
             <div class="stage-canvas-wrapper">
-              <img id="imgStage4" class="stage-preview-img" alt="SAM 2 Segmentation Masks"
-                src="/images/image.png" loading="eager" decoding="async">
+              <img id="imgStage4" class="stage-preview-img" alt="SAM 2 Segmentation Masks" src="/images/image.png"
+                loading="eager" decoding="async">
               <div class="live-scan-laser"></div>
               <div class="live-scan-grid"></div>
               <div class="hud-scan-status" id="hudStatusStage4">
@@ -357,8 +357,8 @@
               </div>
             </div>
             <div class="stage-canvas-wrapper">
-              <img id="imgStage5" class="stage-preview-img" alt="Surrounding Analysis"
-                src="/images/image.png" loading="eager" decoding="async">
+              <img id="imgStage5" class="stage-preview-img" alt="Surrounding Analysis" src="/images/image.png"
+                loading="eager" decoding="async">
               <div class="live-scan-laser"></div>
               <div class="live-scan-grid"></div>
               <div class="hud-scan-status" id="hudStatusStage5">
@@ -394,8 +394,8 @@
               </div>
             </div>
             <div class="stage-canvas-wrapper">
-              <img id="imgStage6" class="stage-preview-img" alt="Measurements Graphics"
-                src="/images/image.png" loading="eager" decoding="async">
+              <img id="imgStage6" class="stage-preview-img" alt="Measurements Graphics" src="/images/image.png"
+                loading="eager" decoding="async">
               <div class="live-scan-laser"></div>
               <div class="live-scan-grid"></div>
               <div class="hud-scan-status" id="hudStatusStage6">
@@ -514,88 +514,6 @@
           </div>
         </div>
 
-        <!-- 2. OSINT CONTEXT / WEATHER INFORMATION - Directly below Radiothermal -->
-        <div class="dashboard-panel-card full-span-card" id="cardOsintContext">
-          <div class="dpc-header">
-            <span class="dpc-title" id="osintHeaderTitle">OSINT CONTEXT (ENVIRONMENTAL INTELLIGENCE)</span>
-            <span class="dpc-badge info" id="osintCoordsBadge">Awaiting Stage 7 Scan...</span>
-          </div>
-          <div class="dpc-osint-body">
-            <div class="osint-tri-grid">
-              <!-- 1. Weather (Today) -->
-              <div class="osint-sub-box weather-box">
-                <div class="osint-box-header">
-                  <span class="osint-sub-title">Weather (Today)</span>
-                  <span class="osint-head-icon">⛅</span>
-                </div>
-                <div class="osint-lines">
-                  <div class="osint-line">Temp: <strong id="osintTemp">--</strong></div>
-                  <div class="osint-line">Humidity: <strong id="osintHumidity">--</strong></div>
-                  <div class="osint-line">Condition: <strong id="osintCondition">--</strong></div>
-                </div>
-              </div>
-
-              <!-- 2. Recent Rainfall (Last 7 Days) -->
-              <div class="osint-sub-box rainfall-box">
-                <div class="osint-sub-title">Recent Rainfall (Last 7 Days)</div>
-                <div class="rainfall-content">
-                  <span class="rain-cloud-big">🌧️</span>
-                  <div class="rain-data">
-                    <span class="rain-mm" id="osintRainAmount">--</span>
-                    <span class="rain-badge-status" id="osintRainIntensity">--</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 3. Live Location Map Thumbnail (Click to Open Full Street Map) -->
-              <div class="osint-sub-box map-box interactive-map-trigger" onclick="openInteractiveMap()"
-                title="Click to Open Full Interactive Street & Satellite Map">
-                <div class="osint-mini-map-wrap" id="osintMapWrapper">
-                  <div id="osintMiniMap" class="osint-mini-map"></div>
-                  <div class="map-live-pin" title="Live Location Pin">
-                    <span class="pin-pulse"></span>
-                    <span class="pin-icon">📍</span>
-                  </div>
-                  <div class="map-hover-hint">
-                    <span>🔍 Open Street Map</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Middle: Area Type & Nearby Infrastructure -->
-            <div class="osint-bottom-meta-row">
-              <div class="meta-col">
-                <span class="meta-label">Area Type</span>
-                <span class="meta-val" id="osintAreaType">--</span>
-              </div>
-              <div class="meta-col">
-                <span class="meta-label">Nearby Infrastructure</span>
-                <span class="meta-val" id="osintNearbyInfra">--</span>
-              </div>
-            </div>
-
-            <!-- Bottom: AREA CONTEXT -->
-            <div class="area-context-card">
-              <div class="area-context-header">AREA CONTEXT</div>
-              <div class="area-context-2col-grid">
-                <div class="ac-item"><span class="ac-icon">🏛️</span> <span id="acAreaDesc">Urban / Semi-Urban
-                    Area</span></div>
-                <div class="ac-item"><span class="ac-icon">🚗</span> Traffic Load: <strong id="acTraffic">--</strong>
-                </div>
-                <div class="ac-item"><span class="ac-icon">⚙️</span> Nearby Drainage: <strong
-                    id="acDrainage">--</strong></div>
-                <div class="ac-item"><span class="ac-icon">🌳</span> Surrounding Vegetation: <strong
-                    id="acVeg">--</strong></div>
-                <div class="ac-item"><span class="ac-icon">🛣️</span> Road Type: <strong id="acRoad">--</strong></div>
-                <div class="ac-item"><span class="ac-icon">💧</span> Surface Condition: <strong
-                    id="acSurface">--</strong></div>
-              </div>
-              <div class="ac-disclaimer-note">Note: Contextual information is for reference and may contain
-                inaccuracies.</div>
-            </div>
-          </div>
-        </div>
 
         <!-- Stage 8 Master Visual Overlay (Large Hero Panel) -->
         <div class="master-analysis-card" id="cardStage8" onclick="openStageDetail(8)">
@@ -645,8 +563,8 @@
           </div>
 
           <div class="master-canvas-container">
-            <img id="imgStage8" class="master-composite-img" alt="Final AI Analysis Result"
-              src="/images/image.png" loading="eager" decoding="async">
+            <img id="imgStage8" class="master-composite-img" alt="Final AI Analysis Result" src="/images/image.png"
+              loading="eager" decoding="async">
             <div class="live-scan-laser"></div>
             <div class="live-scan-grid"></div>
             <div class="hud-scan-status" id="hudStatusStage8">
@@ -827,6 +745,129 @@
 
         <div class="scale-disclaimer" style="margin-top: 6px;">
           Note: AI-inferred radiothermal anomalies from RGB image. Not a physical radiometric FLIR measurement.
+        </div>
+      </div>
+
+      <!-- Panel 8: OSINT CONTEXT (Directly underneath 7. RADIOTHERMAL ANALYSIS in Right Sidebar) -->
+      <div class="sidebar-card osint-sidebar-card" id="cardOsintContext" style="display: none;">
+        <div class="sidebar-card-header osint-sb-header">
+          <span class="panel-title" id="osintHeaderTitle">8. OSINT CONTEXT (ARUNDELPET, AN)</span>
+          <span class="osint-coords-pill" id="osintCoordsBadge" title="Inspection Location Coordinates">
+            <span class="pill-pin">📍</span> <span id="osintCoordsText">16.3067° N, 80.4365° E</span>
+          </span>
+        </div>
+        <div class="osint-default-tag" id="osintDefaultTag">Default Test Location (GPS fallback)</div>
+
+        <div class="osint-sidebar-scroll-body">
+          <!-- 1. Weather (Today) -->
+          <div class="osint-sb-section weather-sb-box">
+            <div class="osint-sb-section-title">WEATHER (TODAY)</div>
+            <div class="weather-sb-content">
+              <span class="weather-sb-icon">⛅</span>
+              <div class="weather-sb-info">
+                <div class="weather-sb-line">Temp: <strong id="osintTemp">25°C - 35°C</strong></div>
+                <div class="weather-sb-line">Humidity: <strong id="osintHumidity">48%</strong></div>
+                <div class="weather-sb-line">Condition: <strong id="osintCondition">Mainly Clear</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Recent Rainfall (Last 7 Days) -->
+          <div class="osint-sb-section rainfall-sb-box">
+            <div class="osint-sb-section-title">RECENT RAINFALL (LAST 7 DAYS)</div>
+            <div class="rainfall-sb-content">
+              <span class="rainfall-sb-icon">🌧️</span>
+              <div class="rainfall-sb-info">
+                <div class="rainfall-sb-amount" id="osintRainAmount">27.9 mm</div>
+                <div class="rainfall-sb-badge" id="osintRainIntensity">Moderate (15–50 mm)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Location Map -->
+          <div class="osint-sb-section map-sb-box">
+            <div class="osint-sb-section-title">LOCATION MAP</div>
+            <div class="map-sb-wrapper" id="osintMapWrapper">
+              <div id="osintMiniMap" class="osint-sb-map"></div>
+              <div class="map-live-pin" title="Location Pin">
+                <span class="pin-pulse"></span>
+                <span class="pin-icon">📍</span>
+              </div>
+              <button type="button" class="map-osm-pill-btn" onclick="openInteractiveMap()"
+                title="Open Full Street & Satellite Map">
+                <span>📍 Open Street Map</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 4. Area / Infrastructure Context -->
+          <div class="osint-sb-section area-infra-sb-box">
+            <div class="area-infra-sb-col">
+              <span class="area-infra-sb-icon">🏛️</span>
+              <div class="area-infra-sb-text">
+                <span class="area-infra-sb-label">Area Type</span>
+                <strong class="area-infra-sb-val" id="osintAreaType">Urban Area</strong>
+              </div>
+            </div>
+            <div class="area-infra-sb-col">
+              <span class="area-infra-sb-icon">🌉</span>
+              <div class="area-infra-sb-text">
+                <span class="area-infra-sb-label">Nearby Infrastructure</span>
+                <strong class="area-infra-sb-val" id="osintNearbyInfra">SH288, Surrounding Structures</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Area Context -->
+          <div class="osint-sb-section area-context-sb-box">
+            <div class="osint-sb-section-title">AREA CONTEXT</div>
+            <div class="area-context-sb-list">
+              <div class="ac-sb-row">
+                <div class="ac-sb-left">
+                  <span class="ac-sb-icon">🏛️</span>
+                  <span id="acAreaDesc">Urban Area</span>
+                </div>
+                <span class="ac-sb-status-badge cyan" id="badgeAcArea">INFO</span>
+              </div>
+              <div class="ac-sb-row">
+                <div class="ac-sb-left">
+                  <span class="ac-sb-icon">⚙️</span>
+                  <span>Nearby Drainage: <strong id="acDrainage">Present</strong></span>
+                </div>
+                <span class="ac-sb-status-badge green" id="badgeAcDrainage">OK</span>
+              </div>
+              <div class="ac-sb-row">
+                <div class="ac-sb-left">
+                  <span class="ac-sb-icon">🛣️</span>
+                  <span>Road Type: <strong id="acRoad">Asphalt / Paved Road</strong></span>
+                </div>
+                <span class="ac-sb-status-badge good" id="badgeAcRoad">GOOD</span>
+              </div>
+              <div class="ac-sb-row">
+                <div class="ac-sb-left">
+                  <span class="ac-sb-icon">🚗</span>
+                  <span>Traffic Load: <strong id="acTraffic">Heavy / High Volume</strong></span>
+                </div>
+                <span class="ac-sb-status-badge red" id="badgeAcTraffic">HIGH</span>
+              </div>
+              <div class="ac-sb-row">
+                <div class="ac-sb-left">
+                  <span class="ac-sb-icon">🌳</span>
+                  <span>Surrounding Vegetation: <strong id="acVeg">Moderate Vegetation</strong></span>
+                </div>
+                <span class="ac-sb-status-badge orange" id="badgeAcVeg">MODERATE</span>
+              </div>
+              <div class="ac-sb-row">
+                <div class="ac-sb-left">
+                  <span class="ac-sb-icon">💧</span>
+                  <span>Surface Condition: <strong id="acSurface">Wet / Surface Water</strong></span>
+                </div>
+                <span class="ac-sb-status-badge blue" id="badgeAcSurface">WET</span>
+              </div>
+            </div>
+            <div class="ac-sb-disclaimer">Note: Contextual information is for reference and may contain inaccuracies.
+              Context supports the possibility of moisture-related conditions.</div>
+          </div>
         </div>
       </div>
 
@@ -1219,10 +1260,12 @@
 
   <!-- ================= FLOATING AI INSPECTOR COPILOT WIDGET ================= -->
   <!-- Floating Robot / AI Agent Action Button (Fixed Bottom-Right) -->
-  <button id="btnFloatingCopilotToggle" class="floating-copilot-btn" onclick="toggleFloatingCopilot()" title="Open AI Inspector Copilot" aria-label="Open AI Inspector Copilot">
+  <button id="btnFloatingCopilotToggle" class="floating-copilot-btn" onclick="toggleFloatingCopilot()"
+    title="Open AI Inspector Copilot" aria-label="Open AI Inspector Copilot">
     <div class="copilot-btn-glow"></div>
     <div class="copilot-btn-icon-wrap">
-      <svg class="robot-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg class="robot-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="11" width="18" height="10" rx="2" />
         <circle cx="12" cy="5" r="2" />
         <path d="M12 7v4" />
@@ -1236,12 +1279,14 @@
   </button>
 
   <!-- Floating AI Inspector Copilot Drawer / Card (Opens on Robot Click) -->
-  <aside class="floating-copilot-panel" id="floatingCopilotPanel" style="display: none;" aria-label="AI Inspector Copilot">
+  <aside class="floating-copilot-panel" id="floatingCopilotPanel" style="display: none;"
+    aria-label="AI Inspector Copilot">
     <!-- Copilot Header Bar (Draggable) -->
     <div class="chat-feed-header" id="copilotHeader" title="Click and drag to move window">
       <div class="chat-title-group">
         <div class="chat-bot-avatar">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="10" rx="2" />
             <circle cx="12" cy="5" r="2" />
             <path d="M12 7v4" />
@@ -1255,37 +1300,46 @@
         </div>
       </div>
       <div class="chat-header-right">
-        <button class="btn-copilot-voice-toggle" id="btnVoiceModeToggle" onclick="toggleContinuousVoiceChat(event)" title="Toggle Continuous Voice Chat Mode (ChatGPT-Style Voice)">
+        <button class="btn-copilot-voice-toggle" id="btnVoiceModeToggle" onclick="toggleContinuousVoiceChat(event)"
+          title="Toggle Continuous Voice Chat Mode (ChatGPT-Style Voice)">
           <span class="voice-toggle-dot"></span>
           <span class="voice-toggle-label" id="voiceToggleLabel">Voice Mode</span>
         </button>
-        <button class="btn-copilot-ctrl" id="btnCopilotTTS" onclick="toggleVoiceOutput(event)" title="Toggle Voice Output (Speech)">
-          <svg id="iconVoiceOn" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-copilot-ctrl" id="btnCopilotTTS" onclick="toggleVoiceOutput(event)"
+          title="Toggle Voice Output (Speech)">
+          <svg id="iconVoiceOn" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+            stroke-width="2">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
           </svg>
-          <svg id="iconVoiceOff" style="display:none;" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          <svg id="iconVoiceOff" style="display:none;" viewBox="0 0 24 24" width="13" height="13" fill="none"
+            stroke="currentColor" stroke-width="2">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
             <line x1="23" y1="9" x2="17" y2="15" />
             <line x1="17" y1="9" x2="23" y2="15" />
           </svg>
         </button>
-        <button class="btn-copilot-ctrl" id="btnCopilotMinimize" onclick="toggleMinimizeCopilot(event)" title="Minimize Window">
+        <button class="btn-copilot-ctrl" id="btnCopilotMinimize" onclick="toggleMinimizeCopilot(event)"
+          title="Minimize Window">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
-        <button class="btn-copilot-ctrl" id="btnCopilotMaximize" onclick="toggleMaximizeCopilot(event)" title="Maximize / Restore Window">
-          <svg id="iconMaximize" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-copilot-ctrl" id="btnCopilotMaximize" onclick="toggleMaximizeCopilot(event)"
+          title="Maximize / Restore Window">
+          <svg id="iconMaximize" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
           </svg>
-          <svg id="iconRestore" style="display:none;" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          <svg id="iconRestore" style="display:none;" viewBox="0 0 24 24" width="13" height="13" fill="none"
+            stroke="currentColor" stroke-width="2">
             <rect x="7" y="7" width="14" height="14" rx="2" ry="2" />
             <path d="M3 17V5a2 2 0 0 1 2-2h12" />
           </svg>
         </button>
-        <button class="btn-copilot-ctrl btn-copilot-close" id="btnCopilotClose" onclick="toggleFloatingCopilot(false)" title="Close Window">✕</button>
+        <button class="btn-copilot-ctrl btn-copilot-close" id="btnCopilotClose" onclick="toggleFloatingCopilot(false)"
+          title="Close Window">✕</button>
       </div>
     </div>
 
@@ -1302,8 +1356,10 @@
         <span class="voice-banner-text" id="copilotVoiceText">Listening... speak naturally</span>
       </div>
       <div class="voice-actions-wrapper">
-        <button class="voice-stop-btn" id="btnVoiceStopSpeech" onclick="interruptVoiceChat(event)" title="Stop Copilot Speaking" style="display:none;">⏹️ Stop</button>
-        <button class="voice-exit-btn" onclick="toggleContinuousVoiceChat(event, false)" title="Turn Voice Chat OFF">✕ Exit Voice</button>
+        <button class="voice-stop-btn" id="btnVoiceStopSpeech" onclick="interruptVoiceChat(event)"
+          title="Stop Copilot Speaking" style="display:none;">⏹️ Stop</button>
+        <button class="voice-exit-btn" onclick="toggleContinuousVoiceChat(event, false)" title="Turn Voice Chat OFF">✕
+          Exit Voice</button>
       </div>
     </div>
 
@@ -1314,13 +1370,21 @@
 
     <!-- Quick Suggestion Chips -->
     <div class="chat-suggestions" id="chatSuggestions">
-      <button class="sugg-chip" onclick="sendQuickPrompt('What defects were detected in this image?')">⚡ Defects Detected</button>
-      <button class="sugg-chip" onclick="sendQuickPrompt('Which defect is the most serious and why?')">⚠️ Worst Defect</button>
-      <button class="sugg-chip" onclick="sendQuickPrompt('What are the calibrated measurements?')">📐 Dimensions</button>
-      <button class="sugg-chip" onclick="sendQuickPrompt('Explain the thermal and moisture anomalies found in Stage 7.')">🔥 Thermal Map</button>
-      <button class="sugg-chip" onclick="sendQuickPrompt('What repair action would normally be considered?')">🛠️ Repair Guidelines</button>
-      <button class="sugg-chip" onclick="sendQuickPrompt('Explain this inspection in simple language.')">📋 Simple Summary</button>
-      <button class="sugg-chip" onclick="sendQuickPrompt('What happened during Stage 1 to Stage 8?')">🔍 Stage Breakdown</button>
+      <button class="sugg-chip" onclick="sendQuickPrompt('What defects were detected in this image?')">⚡ Defects
+        Detected</button>
+      <button class="sugg-chip" onclick="sendQuickPrompt('Which defect is the most serious and why?')">⚠️ Worst
+        Defect</button>
+      <button class="sugg-chip" onclick="sendQuickPrompt('What are the calibrated measurements?')">📐
+        Dimensions</button>
+      <button class="sugg-chip"
+        onclick="sendQuickPrompt('Explain the thermal and moisture anomalies found in Stage 7.')">🔥 Thermal
+        Map</button>
+      <button class="sugg-chip" onclick="sendQuickPrompt('What repair action would normally be considered?')">🛠️ Repair
+        Guidelines</button>
+      <button class="sugg-chip" onclick="sendQuickPrompt('Explain this inspection in simple language.')">📋 Simple
+        Summary</button>
+      <button class="sugg-chip" onclick="sendQuickPrompt('What happened during Stage 1 to Stage 8?')">🔍 Stage
+        Breakdown</button>
     </div>
 
     <!-- Active Input Box -->
@@ -1328,13 +1392,15 @@
       <div class="chat-input-pill">
         <div class="pill-top-row">
           <div class="plus-dropdown-wrapper">
-            <button class="pill-btn-plus" id="btnChatPlus" title="Attach context or image" onclick="togglePlusMenu(event)">
+            <button class="pill-btn-plus" id="btnChatPlus" title="Attach context or image"
+              onclick="togglePlusMenu(event)">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
             </button>
-            <input type="file" id="chatAttachFileInput" accept="image/*" style="display:none;" onchange="handleChatFileAttach(event)">
+            <input type="file" id="chatAttachFileInput" accept="image/*" style="display:none;"
+              onchange="handleChatFileAttach(event)">
 
             <!-- Plus Action Context Popup -->
             <div class="plus-popup-menu" id="plusPopupMenu">
@@ -1367,7 +1433,8 @@
           <input type="text" id="aiChatInput" class="pill-text-input"
             placeholder="Ask AI Copilot about defects, stages, repairs, or measurements..."
             onkeydown="handleChatInputKey(event)">
-          <button id="btnChatMic" class="pill-mic-btn" title="Toggle Continuous Voice Chat Mode" onclick="toggleContinuousVoiceChat(event)">
+          <button id="btnChatMic" class="pill-mic-btn" title="Toggle Continuous Voice Chat Mode"
+            onclick="toggleContinuousVoiceChat(event)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
               <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
