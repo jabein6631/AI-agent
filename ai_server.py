@@ -3491,14 +3491,15 @@ def run_server(port=5000):
     print(f"[+] Server running at http://127.0.0.1:{port}/")
     print(f"[+] Open http://localhost:{port}/ in your web browser to start inspection.\n", flush=True)
     
-    # Pre-load AI models & pre-warm sample cache in background thread so HTTP server starts instantly
+    # Pre-warm sample cache in background thread so HTTP server starts instantly & stays within RAM limits
     import threading
     def _bg_load():
         try:
-            get_ai_agent()
             prewarm_sample_cache()
+            if os.environ.get("PRELOAD_MODELS", "0") == "1":
+                get_ai_agent()
         except Exception as e:
-            print(f"[!] Background model loading & prewarm note: {e}", flush=True)
+            print(f"[!] Background sample cache prewarm note: {e}", flush=True)
     threading.Thread(target=_bg_load, daemon=True).start()
 
     try:
@@ -3509,7 +3510,8 @@ def run_server(port=5000):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AI Infrastructure Inspection Agent Server")
-    parser.add_argument("--port", type=int, default=5000, help="Port to serve web interface on")
+    default_port = int(os.environ.get("PORT", 5000))
+    parser.add_argument("--port", type=int, default=default_port, help="Port to serve web interface on")
     args = parser.parse_args()
     run_server(port=args.port)
 
