@@ -1,0 +1,12 @@
+torch>=2.0.0
+torchvision
+opencv-python-headless
+pillow
+numpy
+supervision
+transformers
+addict
+yapf
+timm
+pycocotools
+requests
