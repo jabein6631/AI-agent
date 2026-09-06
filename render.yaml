@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ai-infrastructure-agent
+    env: python
+    buildCommand: pip install -r requirements.txt && pip install -e .
+    startCommand: python ai_server.py
+    envVars:
+      - key: PORT
+        value: 5000

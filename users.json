@@ -1,0 +1,11 @@
+{
+  "demo@infra.ai": {
+    "id": "u_demo",
+    "name": "Demo Inspector",
+    "email": "demo@infra.ai",
+    "password_hash": "b87ee0de1c97ce74679d8f493259fef4e11fe5e499bbd34c96935dcd7652a4d1",
+    "organization": "Infrastructure Vision Labs",
+    "role": "Lead Senior Inspector",
+    "created_at": "2026-01-01T00:00:00Z"
+  }
+}
