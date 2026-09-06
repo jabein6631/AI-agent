@@ -80,34 +80,38 @@ def ensure_model_checkpoints():
         if _fallback_sam2.exists():
             SAM2_CHECKPOINT = _fallback_sam2
 
-    if not SAM2_CHECKPOINT.exists():
-        print("[*] Downloading SAM 2.1 Hiera Tiny checkpoint from official Meta repository...")
-        sam2_url = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt"
-        target_path = BASE_DIR / "sam2.1_hiera_tiny.pt"
-        try:
-            urllib.request.urlretrieve(sam2_url, target_path)
-            SAM2_CHECKPOINT = target_path
-            print(f"[+] Downloaded SAM 2.1 checkpoint to {target_path}")
-        except Exception as e:
-            print(f"[!] Error downloading SAM 2 checkpoint: {e}")
-
     if not GROUNDING_DINO_CHECKPOINT.exists():
         _fallback_gdino = Path(r"C:\Users\Lenovo\Downloads\analyze\Grounded-SAM-2-main\gdino_checkpoints\groundingdino_swint_ogc.pth")
         if _fallback_gdino.exists():
             GROUNDING_DINO_CHECKPOINT = _fallback_gdino
 
-    if not GROUNDING_DINO_CHECKPOINT.exists():
-        print("[*] Downloading Grounding DINO Swin-T checkpoint from official IDEA-Research repository...")
-        gdino_url = "https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
-        gdino_dir = BASE_DIR / "gdino_checkpoints"
-        gdino_dir.mkdir(parents=True, exist_ok=True)
-        target_path = gdino_dir / "groundingdino_swint_ogc.pth"
-        try:
-            urllib.request.urlretrieve(gdino_url, target_path)
-            GROUNDING_DINO_CHECKPOINT = target_path
-            print(f"[+] Downloaded Grounding DINO checkpoint to {target_path}")
-        except Exception as e:
-            print(f"[!] Error downloading Grounding DINO checkpoint: {e}")
+    def _bg_download():
+        global SAM2_CHECKPOINT, GROUNDING_DINO_CHECKPOINT
+        if not SAM2_CHECKPOINT.exists():
+            print("[*] Downloading SAM 2.1 Hiera Tiny checkpoint from official Meta repository...", flush=True)
+            sam2_url = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt"
+            target_path = BASE_DIR / "sam2.1_hiera_tiny.pt"
+            try:
+                urllib.request.urlretrieve(sam2_url, target_path)
+                SAM2_CHECKPOINT = target_path
+                print(f"[+] Downloaded SAM 2.1 checkpoint to {target_path}", flush=True)
+            except Exception as e:
+                print(f"[!] Error downloading SAM 2 checkpoint: {e}", flush=True)
+
+        if not GROUNDING_DINO_CHECKPOINT.exists():
+            print("[*] Downloading Grounding DINO Swin-T checkpoint from official IDEA-Research repository...", flush=True)
+            gdino_url = "https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
+            gdino_dir = BASE_DIR / "gdino_checkpoints"
+            gdino_dir.mkdir(parents=True, exist_ok=True)
+            target_path = gdino_dir / "groundingdino_swint_ogc.pth"
+            try:
+                urllib.request.urlretrieve(gdino_url, target_path)
+                GROUNDING_DINO_CHECKPOINT = target_path
+                print(f"[+] Downloaded Grounding DINO checkpoint to {target_path}", flush=True)
+            except Exception as e:
+                print(f"[!] Error downloading Grounding DINO checkpoint: {e}", flush=True)
+
+    threading.Thread(target=_bg_download, daemon=True).start()
 
 ensure_model_checkpoints()
 
