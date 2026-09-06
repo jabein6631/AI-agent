@@ -365,11 +365,56 @@ window.addEventListener('message', async (event) => {
 // API CALLS & SAMPLES
 // ------------------------------------------------------------------------------
 
+async function pollScanJob(jobId) {
+  const maxAttempts = 120;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    const res = await fetch(`/api/scan/${jobId}`);
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await res.text();
+      throw new Error(`Job poll returned non-JSON response (${res.status}): ${text.slice(0, 200)}`);
+    }
+    const jobData = await res.json();
+    if (jobData.status === 'completed' && jobData.result) {
+      return jobData.result;
+    } else if (jobData.status === 'failed') {
+      throw new Error(jobData.error || `Scan failed at stage ${jobData.stage || 1}`);
+    } else if (jobData.stage_name) {
+      showToast(`Scan Progress: Stage ${jobData.stage || 1} — ${jobData.stage_name}`);
+    }
+  }
+  throw new Error('Scan job timed out waiting for AI processing completion.');
+}
+
+async function parseApiResponse(res) {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const rawText = await res.text();
+    throw new Error(`API request failed with ${res.status} ${res.statusText} (${contentType || 'non-JSON'}): ${rawText.slice(0, 200)}`);
+  }
+
+  let data = await res.json();
+  if (!res.ok || data.success === false || data.error) {
+    throw new Error(data.error || `API request failed with status ${res.status}`);
+  }
+
+  if (data.job_id && (data.status === 'queued' || data.status === 'processing')) {
+    data = await pollScanJob(data.job_id);
+  }
+  return data;
+}
+
 async function checkHealth() {
   try {
     const res = await fetch('/api/health');
-    const data = await res.json();
-    console.log('[+] Health status:', data);
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      console.log('[+] Health status:', data);
+    } else {
+      console.warn('[!] Health check non-JSON response:', await res.text());
+    }
   } catch (err) {
     console.warn('[!] Health check warning:', err);
   }
@@ -378,6 +423,11 @@ async function checkHealth() {
 async function loadAvailableSamples() {
   try {
     const res = await fetch('/api/samples');
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn('[!] Samples endpoint returned non-JSON response');
+      return;
+    }
     const data = await res.json();
     if (data.samples && data.samples.length > 0) {
       data.samples.forEach(s => {
@@ -791,7 +841,9 @@ async function handleFileUpload(event) {
       filename: file.name,
       file: file,
       thumb: thumbData,
-      status: 'Queued',
+      imgUrl: thumbData,
+      category: 'road',
+      status: 'Uploaded / Ready for Analysis',
       isSample: false
     };
     state.inspectionQueue.push(item);
@@ -902,11 +954,7 @@ async function runAnalysisForBase64(base64Data, filename) {
     });
 
     clearTimeout(timeoutId);
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      throw new Error(data.error || 'Inference failed');
-    }
-
+    const data = await parseApiResponse(res);
     finishAnalysis(data);
   } catch (err) {
     console.error('[!] Analysis error:', err);
@@ -936,11 +984,7 @@ async function runAnalysisForSample(samplePath, filename) {
     });
 
     clearTimeout(timeoutId);
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      throw new Error(data.error || 'Inference failed');
-    }
-
+    const data = await parseApiResponse(res);
     finishAnalysis(data);
   } catch (err) {
     console.error('[!] Analysis error:', err);
@@ -1074,11 +1118,7 @@ async function runAnalysisForFile(file) {
     });
 
     clearTimeout(timeoutId);
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      throw new Error(data.error || 'Inference failed');
-    }
-
+    const data = await parseApiResponse(res);
     finishAnalysis(data);
   } catch (err) {
     console.error('[!] Analysis error:', err);
@@ -1597,14 +1637,10 @@ async function executeStageAnalyzer(stageNum) {
     });
   }
 
-  if (!res || !res.ok) {
-    throw new Error('Analysis request failed on backend');
+  if (!res) {
+    throw new Error('No active image selected to scan stage');
   }
-
-  const freshData = await res.json();
-  if (freshData.error) {
-    throw new Error(freshData.error);
-  }
+  const freshData = await parseApiResponse(res);
   return freshData;
 }
 

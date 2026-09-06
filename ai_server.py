@@ -102,8 +102,8 @@ def prepare_gdino_tensor_fast(pil_img, max_side=720, min_side=540):
     scale = min_side / min(w_orig, h_orig)
     if round(scale * max(w_orig, h_orig)) > max_side:
         scale = max_side / max(w_orig, h_orig)
-    new_w = int(round(w_orig * scale))
-    new_h = int(round(h_orig * scale))
+    new_w = max(320, (int(round(w_orig * scale)) // 32) * 32)
+    new_h = max(320, (int(round(h_orig * scale)) // 32) * 32)
     resized_img = pil_img.resize((new_w, new_h), Image.Resampling.BILINEAR)
     
     img_tensor = TF.to_tensor(resized_img)
@@ -2203,12 +2203,128 @@ def persist_analysis_to_supabase(image_bytes, filename, results, location_payloa
             
     threading.Thread(target=_run, daemon=True).start()
 
+SCAN_JOBS = {}
+SCAN_JOBS_LOCK = threading.Lock()
+
+def create_scan_job(filename, category_override="auto", location_payload=None, image_bytes=None, sample_path=None):
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    now_ts = time.time()
+    job = {
+        "job_id": job_id,
+        "status": "queued",
+        "stage": 1,
+        "stage_name": "Image Ingestion & Optical Normalization",
+        "message": "Job queued for AI processing",
+        "filename": filename,
+        "category": category_override,
+        "location": location_payload,
+        "result": None,
+        "error": None,
+        "created_at": now_ts,
+        "updated_at": now_ts
+    }
+    with SCAN_JOBS_LOCK:
+        SCAN_JOBS[job_id] = job
+        # Cleanup jobs older than 1 hour
+        expired_keys = [k for k, v in SCAN_JOBS.items() if now_ts - v.get("created_at", 0) > 3600]
+        for k in expired_keys:
+            del SCAN_JOBS[k]
+
+    def _worker():
+        print(f"\n[SCAN] Job created: {job_id} for file: {filename}")
+        with SCAN_JOBS_LOCK:
+            if job_id in SCAN_JOBS:
+                SCAN_JOBS[job_id]["status"] = "processing"
+                SCAN_JOBS[job_id]["updated_at"] = time.time()
+        
+        try:
+            with _INFERENCE_LOCK:
+                agent = get_ai_agent()
+                
+                def _log_stage(stage_num, stage_name):
+                    print(f"[SCAN] Stage {stage_num} ({stage_name}) processing for job: {job_id}")
+                    with SCAN_JOBS_LOCK:
+                        if job_id in SCAN_JOBS:
+                            SCAN_JOBS[job_id]["stage"] = stage_num
+                            SCAN_JOBS[job_id]["stage_name"] = stage_name
+                            SCAN_JOBS[job_id]["message"] = f"Processing Stage {stage_num}: {stage_name}"
+                            SCAN_JOBS[job_id]["updated_at"] = time.time()
+
+                _log_stage(1, "Image Ingestion & Optical Normalization")
+                
+                img_bytes = image_bytes
+                if not img_bytes and sample_path:
+                    s_path = BASE_DIR / sample_path
+                    if s_path.exists():
+                        with open(s_path, "rb") as f:
+                            img_bytes = f.read()
+
+                if not img_bytes:
+                    raise ValueError("No image data found for scan job")
+
+                _log_stage(2, "Scene & Infrastructure Classification")
+                _log_stage(3, "Zero-Shot Defect Detection (Grounding DINO)")
+                _log_stage(4, "High-Precision Instance Segmentation (SAM 2.1)")
+                _log_stage(5, "Surroundings & Environmental Hazard Analysis")
+                _log_stage(6, "Calibrated Physical Metric Measurements")
+                _log_stage(7, "Radiothermal & Moisture Anomaly Modeling")
+                _log_stage(8, "Master Multi-Spectral Synthesis & Executive Action Report")
+
+                results = agent.analyze_image_file(
+                    img_bytes,
+                    filename=filename,
+                    category_override=category_override,
+                    location_payload=location_payload
+                )
+
+                print(f"[SCAN] Job completed: {job_id}")
+                with SCAN_JOBS_LOCK:
+                    if job_id in SCAN_JOBS:
+                        SCAN_JOBS[job_id]["status"] = "completed"
+                        SCAN_JOBS[job_id]["result"] = results
+                        SCAN_JOBS[job_id]["updated_at"] = time.time()
+
+                img_hash = hashlib.md5(img_bytes).hexdigest()
+                ck = f"{img_hash}_{filename}_{category_override}"
+                INSPECTION_CACHE[ck] = results
+
+                persist_analysis_to_supabase(img_bytes, filename, results, location_payload)
+
+        except Exception as ex:
+            import traceback
+            err_text = f"Scan failed at Stage {SCAN_JOBS.get(job_id, {}).get('stage', 1)}: {str(ex)}"
+            print(f"[ERROR] Job {job_id} failed: {err_text}")
+            traceback.print_exc()
+            with SCAN_JOBS_LOCK:
+                if job_id in SCAN_JOBS:
+                    SCAN_JOBS[job_id]["status"] = "failed"
+                    SCAN_JOBS[job_id]["error"] = err_text
+                    SCAN_JOBS[job_id]["updated_at"] = time.time()
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return job_id
+
+
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 class InspectionRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
+
+    def send_error(self, code, message=None, explain=None):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path.startswith("/api/"):
+            err_msg = message or "HTTP Error"
+            if explain:
+                err_msg += f": {explain}"
+            self._send_json(code, {
+                "success": False,
+                "status": "failed",
+                "error": err_msg
+            })
+        else:
+            super().send_error(code, message=message, explain=explain)
 
     def _send_json(self, status_code, data):
         def _json_serial(obj):
@@ -2244,7 +2360,18 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
         
         # API: Health check
         if parsed.path == "/api/health":
-            self._send_json(200, {"status": "ok", "agent_ready": ai_agent is not None, "device": DEVICE})
+            self._send_json(200, {"status": "ok", "healthy": True, "agent_ready": ai_agent is not None, "device": DEVICE})
+            return
+
+        # API: Scan / Job Status Query
+        if parsed.path.startswith("/api/scan/") or parsed.path.startswith("/api/job/"):
+            job_id = parsed.path.split("/")[-1]
+            with SCAN_JOBS_LOCK:
+                job_data = SCAN_JOBS.get(job_id)
+            if job_data:
+                self._send_json(200, job_data)
+            else:
+                self._send_json(404, {"success": False, "status": "failed", "error": f"Job ID '{job_id}' not found"})
             return
 
         # API: Supabase configuration
@@ -2378,6 +2505,11 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(200, osint_data)
             return
 
+        # API fallback for unmatched /api/* endpoints
+        if parsed.path.startswith("/api/"):
+            self._send_json(404, {"success": False, "status": "failed", "error": f"API endpoint not found: {parsed.path}"})
+            return
+
         # Serve static web files
         super().do_GET()
 
@@ -2476,7 +2608,7 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(200, {"status": "ok", "message": "Logged out successfully"})
             return
 
-        if parsed.path == "/api/analyze":
+        if parsed.path in ("/api/analyze", "/api/scan"):
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(content_length)
@@ -2485,16 +2617,19 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                 image_bytes = None
                 filename = "uploaded_inspection.jpg"
                 location_payload = None
+                sample_rel_path = None
+                data = {}
                 
                 if "application/json" in content_type:
-                    data = json.loads(body.decode("utf-8"))
+                    data = json.loads(body.decode("utf-8")) if body else {}
                     if "image_base64" in data:
                         b64_str = data["image_base64"]
                         if "," in b64_str:
                             b64_str = b64_str.split(",", 1)[1]
                         image_bytes = base64.b64decode(b64_str)
                     elif "sample_path" in data:
-                        sample_path = BASE_DIR / data["sample_path"]
+                        sample_rel_path = data["sample_path"]
+                        sample_path = BASE_DIR / sample_rel_path
                         if sample_path.exists():
                             with open(sample_path, "rb") as f:
                                 image_bytes = f.read()
@@ -2526,10 +2661,28 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                                     break
                             
                 if not image_bytes:
-                    self._send_json(400, {"error": "No image payload provided"})
+                    self._send_json(400, {"success": False, "status": "failed", "error": "No image payload provided"})
                     return
                     
                 category_override = data.get("category", "auto") if "application/json" in content_type else "auto"
+                is_async = (data.get("mode") == "async" or data.get("async") is True or "async" in parsed.query)
+
+                if is_async:
+                    job_id = create_scan_job(
+                        filename=filename,
+                        category_override=category_override,
+                        location_payload=location_payload,
+                        image_bytes=image_bytes,
+                        sample_path=sample_rel_path
+                    )
+                    self._send_json(202, {
+                        "success": True,
+                        "job_id": job_id,
+                        "status": "queued",
+                        "message": "Scan job successfully queued"
+                    })
+                    return
+
                 img_hash = hashlib.md5(image_bytes).hexdigest()
                 loc_lat = round(float(location_payload.get('latitude', 16.3067)), 3) if location_payload else 16.307
                 loc_lon = round(float(location_payload.get('longitude', 80.4365)), 3) if location_payload else 80.437
@@ -2546,6 +2699,8 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                     if ck in INSPECTION_CACHE:
                         print(f"\n[+] Returning cached inspection results for: {filename} ({ck[:12]})")
                         cached_res = dict(INSPECTION_CACHE[ck])
+                        cached_res["success"] = True
+                        cached_res["status"] = "completed"
                         self._send_json(200, cached_res)
                         return
 
@@ -2554,6 +2709,8 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                     for ck in cache_keys:
                         if ck in INSPECTION_CACHE:
                             cached_res = dict(INSPECTION_CACHE[ck])
+                            cached_res["success"] = True
+                            cached_res["status"] = "completed"
                             self._send_json(200, cached_res)
                             return
                     agent = get_ai_agent()
@@ -2567,15 +2724,21 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                     INSPECTION_CACHE[cache_keys[1]] = results
                     INSPECTION_CACHE[cache_keys[3]] = results
 
-                    # Trigger server-side background persistence to Supabase REST API & Storage
                     persist_analysis_to_supabase(image_bytes, filename, results, location_payload)
 
+                results["success"] = True
+                results["status"] = "completed"
                 self._send_json(200, results)
                 
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-                self._send_json(500, {"error": str(e), "traceback": traceback.format_exc()})
+                self._send_json(500, {
+                    "success": False,
+                    "status": "failed",
+                    "error": str(e),
+                    "traceback": traceback.format_exc()
+                })
             return
             
         elif parsed.path in ("/api/chat", "/api/copilot/chat"):
@@ -2608,7 +2771,11 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(500, {"error": str(e), "traceback": traceback.format_exc()})
             return
 
-        self._send_json(404, {"error": "Endpoint not found"})
+        if parsed.path.startswith("/api/"):
+            self._send_json(404, {"success": False, "status": "failed", "error": f"API endpoint not found: {parsed.path}"})
+            return
+
+        self._send_json(404, {"success": False, "status": "failed", "error": "Endpoint not found"})
 
 
 class InspectionCopilotEngine:
@@ -3847,17 +4014,20 @@ def prewarm_sample_cache():
     print("[+] Sample inspection cache ready for instantaneous loading!\n", flush=True)
 
 
-def run_server(port=5000):
+def run_server(port=None):
+    if port is None:
+        port = int(os.environ.get("PORT", 10000))
+    host = "0.0.0.0"
     print("=" * 70)
     print(" AI INFRASTRUCTURE INSPECTION AGENT - WEB SERVER & CV ENGINE")
     print("=" * 70)
     
-    server_address = ("", port)
+    server_address = (host, port)
     httpd = ThreadedHTTPServer(server_address, InspectionRequestHandler)
-    print(f"[+] Server running at http://127.0.0.1:{port}/")
+    print(f"[+] Server running on {host}:{port}")
+    print(f"[+] Server running at http://{host}:{port}/")
     print(f"[+] Open http://localhost:{port}/ in your web browser to start inspection.\n", flush=True)
     
-    # Pre-warm sample cache in background thread so HTTP server starts instantly & stays within RAM limits
     import threading
     def _bg_load():
         try:
@@ -3876,7 +4046,7 @@ def run_server(port=5000):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AI Infrastructure Inspection Agent Server")
-    default_port = int(os.environ.get("PORT", 5000))
+    default_port = int(os.environ.get("PORT", 10000))
     parser.add_argument("--port", type=int, default=default_port, help="Port to serve web interface on")
     args = parser.parse_args()
     run_server(port=args.port)
