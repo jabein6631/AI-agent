@@ -85,39 +85,51 @@ def download_file_gil_friendly(url, target_path):
 def ensure_model_checkpoints():
     global SAM2_CHECKPOINT, GROUNDING_DINO_CHECKPOINT
     
-    if not SAM2_CHECKPOINT.exists():
+    if not SAM2_CHECKPOINT.exists() or SAM2_CHECKPOINT.stat().st_size < 50_000_000:
         _fallback_sam2 = Path(r"C:\Users\Lenovo\Downloads\analyze\Grounded-SAM-2-main\sam2.1_hiera_tiny.pt")
-        if _fallback_sam2.exists():
+        if _fallback_sam2.exists() and _fallback_sam2.stat().st_size > 50_000_000:
             SAM2_CHECKPOINT = _fallback_sam2
 
-    if not GROUNDING_DINO_CHECKPOINT.exists():
+    if not GROUNDING_DINO_CHECKPOINT.exists() or GROUNDING_DINO_CHECKPOINT.stat().st_size < 300_000_000:
         _fallback_gdino = Path(r"C:\Users\Lenovo\Downloads\analyze\Grounded-SAM-2-main\gdino_checkpoints\groundingdino_swint_ogc.pth")
-        if _fallback_gdino.exists():
+        if _fallback_gdino.exists() and _fallback_gdino.stat().st_size > 300_000_000:
             GROUNDING_DINO_CHECKPOINT = _fallback_gdino
 
     def _bg_download():
         global SAM2_CHECKPOINT, GROUNDING_DINO_CHECKPOINT
-        if not SAM2_CHECKPOINT.exists():
+        target_sam2 = BASE_DIR / "sam2.1_hiera_tiny.pt"
+        if not target_sam2.exists() or target_sam2.stat().st_size < 50_000_000:
             print("[*] Downloading SAM 2.1 Hiera Tiny checkpoint...", flush=True)
             sam2_url = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt"
-            target_path = BASE_DIR / "sam2.1_hiera_tiny.pt"
+            temp_sam2 = BASE_DIR / "sam2.1_hiera_tiny.pt.tmp"
             try:
-                download_file_gil_friendly(sam2_url, target_path)
-                SAM2_CHECKPOINT = target_path
-                print(f"[+] Downloaded SAM 2.1 checkpoint to {target_path}", flush=True)
+                download_file_gil_friendly(sam2_url, temp_sam2)
+                if temp_sam2.exists() and temp_sam2.stat().st_size > 50_000_000:
+                    if target_sam2.exists():
+                        try: target_sam2.unlink()
+                        except Exception: pass
+                    temp_sam2.replace(target_sam2)
+                    SAM2_CHECKPOINT = target_sam2
+                    print(f"[+] Downloaded SAM 2.1 checkpoint to {target_sam2}", flush=True)
             except Exception as e:
                 print(f"[!] Error downloading SAM 2 checkpoint: {e}", flush=True)
 
-        if not GROUNDING_DINO_CHECKPOINT.exists():
+        gdino_dir = BASE_DIR / "gdino_checkpoints"
+        target_gdino = gdino_dir / "groundingdino_swint_ogc.pth"
+        if not target_gdino.exists() or target_gdino.stat().st_size < 300_000_000:
             print("[*] Downloading Grounding DINO Swin-T checkpoint...", flush=True)
             gdino_url = "https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
-            gdino_dir = BASE_DIR / "gdino_checkpoints"
             gdino_dir.mkdir(parents=True, exist_ok=True)
-            target_path = gdino_dir / "groundingdino_swint_ogc.pth"
+            temp_gdino = gdino_dir / "groundingdino_swint_ogc.pth.tmp"
             try:
-                download_file_gil_friendly(gdino_url, target_path)
-                GROUNDING_DINO_CHECKPOINT = target_path
-                print(f"[+] Downloaded Grounding DINO checkpoint to {target_path}", flush=True)
+                download_file_gil_friendly(gdino_url, temp_gdino)
+                if temp_gdino.exists() and temp_gdino.stat().st_size > 300_000_000:
+                    if target_gdino.exists():
+                        try: target_gdino.unlink()
+                        except Exception: pass
+                    temp_gdino.replace(target_gdino)
+                    GROUNDING_DINO_CHECKPOINT = target_gdino
+                    print(f"[+] Downloaded Grounding DINO checkpoint to {target_gdino}", flush=True)
             except Exception as e:
                 print(f"[!] Error downloading Grounding DINO checkpoint: {e}", flush=True)
 
@@ -560,44 +572,53 @@ class MultiInstanceInspectionAgent:
                  gdino_config=GROUNDING_DINO_CONFIG, gdino_checkpoint=GROUNDING_DINO_CHECKPOINT,
                  device=DEVICE):
         self.device = device
+        self.sam2_config = sam2_config
+        self.sam2_checkpoint = sam2_checkpoint
+        self.gdino_config = gdino_config
+        self.gdino_checkpoint = gdino_checkpoint
+        
         self.sam2_model = None
         self.sam2_predictor = None
         self.grounding_model = None
         
         print(f"[*] Initializing Dynamic Multi-Category AI Inspection Agent on {self.device}...")
-        
+        self.try_load_models()
+        print("[+] Vision AI Agent initialized and operational.\n", flush=True)
+
+    def try_load_models(self):
         # Safely attempt SAM 2 model initialization
-        if Path(sam2_checkpoint).exists():
+        sam2_p = Path(self.sam2_checkpoint)
+        if self.sam2_predictor is None and sam2_p.exists() and sam2_p.stat().st_size > 50_000_000:
             try:
                 print("  -> Loading SAM 2.1 Model...", flush=True)
-                self.sam2_model = build_sam2(str(sam2_config), str(sam2_checkpoint), device=self.device)
+                self.sam2_model = build_sam2(str(self.sam2_config), str(sam2_p), device=self.device)
                 self.sam2_predictor = SAM2ImagePredictor(self.sam2_model)
                 print("  [+] SAM 2.1 Model loaded successfully.", flush=True)
             except Exception as e:
                 print(f"  [!] SAM 2 model load note (using OpenCV segmentation fallback): {e}", flush=True)
-        else:
-            print(f"  [*] SAM 2 checkpoint not yet present ({sam2_checkpoint.name}), using analytical vision fallback.", flush=True)
+                self.sam2_model = None
+                self.sam2_predictor = None
             
         # Safely attempt Grounding DINO model initialization
-        if Path(gdino_checkpoint).exists():
+        gdino_p = Path(self.gdino_checkpoint)
+        if self.grounding_model is None and gdino_p.exists() and gdino_p.stat().st_size > 300_000_000:
             try:
                 print("  -> Loading Grounding DINO Model...", flush=True)
                 self.grounding_model = load_model(
-                    model_config_path=str(gdino_config),
-                    model_checkpoint_path=str(gdino_checkpoint),
+                    model_config_path=str(self.gdino_config),
+                    model_checkpoint_path=str(gdino_p),
                     device=self.device,
                 )
                 print("  [+] Grounding DINO Model loaded successfully.", flush=True)
             except Exception as e:
                 print(f"  [!] Grounding DINO model load note (using OpenCV vision fallback): {e}", flush=True)
-        else:
-            print(f"  [*] Grounding DINO checkpoint not yet present ({gdino_checkpoint.name}), using analytical vision fallback.", flush=True)
-
-        print("[+] Vision AI Agent initialized and operational.\n", flush=True)
+                self.grounding_model = None
 
     def analyze_image_file(self, image_path_or_bytes, filename="uploaded_image.jpg", category_override="auto", location_payload=None):
         """Run complete 7-stage hierarchical inspection with fast CPU inference, radiothermal anomaly mapping, and location context."""
         import hashlib
+        
+        self.try_load_models()
         
         # 1. Load image from path or memory buffer and compute hash for instant cache
         if isinstance(image_path_or_bytes, (str, Path)):
