@@ -369,19 +369,27 @@ async function pollScanJob(jobId) {
   const maxAttempts = 120;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 1500));
-    const res = await fetch(`/api/scan/${jobId}`);
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      const text = await res.text();
-      throw new Error(`Job poll returned non-JSON response (${res.status}): ${text.slice(0, 200)}`);
-    }
-    const jobData = await res.json();
-    if (jobData.status === 'completed' && jobData.result) {
-      return jobData.result;
-    } else if (jobData.status === 'failed') {
-      throw new Error(jobData.error || `Scan failed at stage ${jobData.stage || 1}`);
-    } else if (jobData.stage_name) {
-      showToast(`Scan Progress: Stage ${jobData.stage || 1} — ${jobData.stage_name}`);
+    try {
+      const res = await fetch(`/api/scan/${jobId}`);
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        console.warn(`[POLL] Non-JSON response on attempt ${attempt} (${res.status}), retrying...`);
+        continue;
+      }
+      const jobData = await res.json();
+      if (jobData.status === 'completed' && jobData.result) {
+        return jobData.result;
+      } else if (jobData.status === 'failed') {
+        throw new Error(jobData.error || `Scan failed at stage ${jobData.stage || 1}`);
+      } else if (jobData.stage_name) {
+        showToast(`Scan Progress: Stage ${jobData.stage || 1} — ${jobData.stage_name}`);
+      }
+    } catch (err) {
+      if (err.message && err.message.includes('Scan failed')) {
+        throw err;
+      }
+      if (attempt >= maxAttempts - 1) throw err;
+      console.warn(`[POLL] Transient poll error on attempt ${attempt}: ${err.message}, retrying...`);
     }
   }
   throw new Error('Scan job timed out waiting for AI processing completion.');
@@ -391,6 +399,9 @@ async function parseApiResponse(res) {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
     const rawText = await res.text();
+    if (res.status === 503 || res.status === 502) {
+      throw new Error(`Server is starting up (${res.status}). Please click Scan again in a moment.`);
+    }
     throw new Error(`API request failed with ${res.status} ${res.statusText} (${contentType || 'non-JSON'}): ${rawText.slice(0, 200)}`);
   }
 

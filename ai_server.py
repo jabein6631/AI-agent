@@ -554,26 +554,46 @@ class MultiInstanceInspectionAgent:
     Dynamic Multi-Category AI Infrastructure Inspection Agent.
     Hierarchically classifies infrastructure type (Road, Building, Bridge, Drainage, Other),
     executes category-tailored defect detection via Grounding DINO, and segments all instances with SAM 2.1.
+    Includes built-in OpenCV analytical vision engine for fast, high-res fallback.
     """
     def __init__(self, sam2_checkpoint=SAM2_CHECKPOINT, sam2_config=SAM2_MODEL_CONFIG,
                  gdino_config=GROUNDING_DINO_CONFIG, gdino_checkpoint=GROUNDING_DINO_CHECKPOINT,
                  device=DEVICE):
         self.device = device
+        self.sam2_model = None
+        self.sam2_predictor = None
+        self.grounding_model = None
+        
         print(f"[*] Initializing Dynamic Multi-Category AI Inspection Agent on {self.device}...")
         
-        # Load SAM 2
-        print("  -> Loading SAM 2.1 Model...")
-        self.sam2_model = build_sam2(sam2_config, sam2_checkpoint, device=self.device)
-        self.sam2_predictor = SAM2ImagePredictor(self.sam2_model)
-        
-        # Load Grounding DINO
-        print("  -> Loading Grounding DINO Model...")
-        self.grounding_model = load_model(
-            model_config_path=gdino_config,
-            model_checkpoint_path=gdino_checkpoint,
-            device=self.device,
-        )
-        print("[+] Vision AI Models loaded and ready.\n")
+        # Safely attempt SAM 2 model initialization
+        if Path(sam2_checkpoint).exists():
+            try:
+                print("  -> Loading SAM 2.1 Model...", flush=True)
+                self.sam2_model = build_sam2(str(sam2_config), str(sam2_checkpoint), device=self.device)
+                self.sam2_predictor = SAM2ImagePredictor(self.sam2_model)
+                print("  [+] SAM 2.1 Model loaded successfully.", flush=True)
+            except Exception as e:
+                print(f"  [!] SAM 2 model load note (using OpenCV segmentation fallback): {e}", flush=True)
+        else:
+            print(f"  [*] SAM 2 checkpoint not yet present ({sam2_checkpoint.name}), using analytical vision fallback.", flush=True)
+            
+        # Safely attempt Grounding DINO model initialization
+        if Path(gdino_checkpoint).exists():
+            try:
+                print("  -> Loading Grounding DINO Model...", flush=True)
+                self.grounding_model = load_model(
+                    model_config_path=str(gdino_config),
+                    model_checkpoint_path=str(gdino_checkpoint),
+                    device=self.device,
+                )
+                print("  [+] Grounding DINO Model loaded successfully.", flush=True)
+            except Exception as e:
+                print(f"  [!] Grounding DINO model load note (using OpenCV vision fallback): {e}", flush=True)
+        else:
+            print(f"  [*] Grounding DINO checkpoint not yet present ({gdino_checkpoint.name}), using analytical vision fallback.", flush=True)
+
+        print("[+] Vision AI Agent initialized and operational.\n", flush=True)
 
     def analyze_image_file(self, image_path_or_bytes, filename="uploaded_image.jpg", category_override="auto", location_payload=None):
         """Run complete 7-stage hierarchical inspection with fast CPU inference, radiothermal anomaly mapping, and location context."""
@@ -636,11 +656,14 @@ class MultiInstanceInspectionAgent:
         # Fast PIL and Grounding DINO tensor preparation
         img_rgb = cv2.cvtColor(original_bgr, cv2.COLOR_BGR2RGB)
         img_source = Image.fromarray(img_rgb)
-        img_tensor = prepare_gdino_tensor_fast(img_source)
-            
-        # Set SAM 2 image
-        with torch.inference_mode():
-            self.sam2_predictor.set_image(img_source)
+        
+        # Set SAM 2 image if available
+        if self.sam2_predictor is not None:
+            try:
+                with torch.inference_mode():
+                    self.sam2_predictor.set_image(img_source)
+            except Exception as e:
+                print(f"[!] SAM 2 set_image note: {e}", flush=True)
         
         # ----------------------------------------------------------------------
         # STAGE 2 & 3: UNIVERSAL HIGH-PRECISION DEFECT INFERENCE (NO FILENAME BIAS)
@@ -652,19 +675,26 @@ class MultiInstanceInspectionAgent:
             "rust streak . rust stain . pothole . asphalt cavity . road crack . alligator crack . "
             "drain grate . culvert . standing water . water accumulation ."
         )
-        print(f"[*] [Stage 2 & 3] Running Universal Grounding DINO Defect Inference on {filename} ({w}x{h})...")
         
-        with torch.inference_mode():
-            defect_boxes, defect_logits, defect_phrases = predict(
-                model=self.grounding_model,
-                image=img_tensor,
-                caption=universal_defect_prompt,
-                box_threshold=0.16,
-                text_threshold=0.13,
-                device=self.device
-            )
-        
-        raw_defect_detections = self._parse_detections(defect_boxes, defect_logits, defect_phrases, w, h)
+        raw_defect_detections = []
+        if self.grounding_model is not None:
+            try:
+                print(f"[*] [Stage 2 & 3] Running Universal Grounding DINO Defect Inference on {filename} ({w}x{h})...", flush=True)
+                img_tensor = prepare_gdino_tensor_fast(img_source)
+                with torch.inference_mode():
+                    defect_boxes, defect_logits, defect_phrases = predict(
+                        model=self.grounding_model,
+                        image=img_tensor,
+                        caption=universal_defect_prompt,
+                        box_threshold=0.16,
+                        text_threshold=0.13,
+                        device=self.device
+                    )
+                raw_defect_detections = self._parse_detections(defect_boxes, defect_logits, defect_phrases, w, h)
+            except Exception as e:
+                print(f"[!] Grounding DINO inference note (falling back to vision analytical engine): {e}", flush=True)
+        else:
+            print(f"[*] [Stage 2 & 3] Running High-Precision Vision Analytics on {filename} ({w}x{h})...", flush=True)
 
         # Detect prominent structural fissures, slab delaminations & exposed rebar grids
         gray = cv2.cvtColor(original_bgr, cv2.COLOR_BGR2GRAY)
@@ -1431,13 +1461,15 @@ class MultiInstanceInspectionAgent:
             lbls_np = np.array([1], dtype=np.int32)
             
             try:
-                with torch.inference_mode():
-                    masks, scores, _ = self.sam2_predictor.predict(
-                        point_coords=pts_np,
-                        point_labels=lbls_np,
-                        box=box_np,
-                        multimask_output=False,
-                    )
+                masks = None
+                if self.sam2_predictor is not None:
+                    with torch.inference_mode():
+                        masks, scores, _ = self.sam2_predictor.predict(
+                            point_coords=pts_np,
+                            point_labels=lbls_np,
+                            box=box_np,
+                            multimask_output=False,
+                        )
                 if masks is not None and len(masks) > 0:
                     m = masks[0]
                     if m.shape != (h, w):
@@ -1508,13 +1540,15 @@ class MultiInstanceInspectionAgent:
         ], dtype=np.float32)
         guide_lbls = np.array([1, 1, 1, 1], dtype=np.int32)
         try:
-            with torch.inference_mode():
-                s_masks, _, _ = self.sam2_predictor.predict(
-                    point_coords=guide_pts,
-                    point_labels=guide_lbls,
-                    box=s_box_np,
-                    multimask_output=False
-                )
+            s_masks = None
+            if self.sam2_predictor is not None:
+                with torch.inference_mode():
+                    s_masks, _, _ = self.sam2_predictor.predict(
+                        point_coords=guide_pts,
+                        point_labels=guide_lbls,
+                        box=s_box_np,
+                        multimask_output=False
+                    )
             if s_masks is not None and len(s_masks) > 0:
                 sm = s_masks[0]
                 if sm.shape != (h, w):
@@ -2399,165 +2433,171 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        
-        # API: Health check
-        if parsed.path == "/api/health":
-            self._send_json(200, {"status": "ok", "healthy": True, "agent_ready": ai_agent is not None, "device": DEVICE})
-            return
-
-        # API: Scan / Job Status Query
-        if parsed.path.startswith("/api/scan/") or parsed.path.startswith("/api/job/"):
-            job_id = parsed.path.split("/")[-1]
-            with SCAN_JOBS_LOCK:
-                job_data = SCAN_JOBS.get(job_id)
-            if job_data:
-                self._send_json(200, job_data)
-            else:
-                self._send_json(404, {"success": False, "status": "failed", "error": f"Job ID '{job_id}' not found"})
-            return
-
-        # API: Supabase configuration
-        if parsed.path == "/api/config":
-            env_data = {}
-            candidate_paths = [
-                BASE_DIR / ".env",
-                Path(".env").resolve(),
-                Path.cwd() / ".env",
-                Path(__file__).parent / ".env"
-            ]
-            for env_path in candidate_paths:
-                if env_path.is_file():
-                    try:
-                        with open(env_path, "r", encoding="utf-8") as f:
-                            for line in f:
-                                line = line.strip()
-                                if line and not line.startswith("#") and "=" in line:
-                                    k, v = line.split("=", 1)
-                                    env_data[k.strip()] = v.strip()
-                        if env_data.get("SUPABASE_URL"):
-                            break
-                    except Exception:
-                        pass
-            s_url = env_data.get("SUPABASE_URL") or os.getenv("SUPABASE_URL") or "https://byexjyvxykptwqobesor.supabase.co"
-            s_key = env_data.get("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5ZXhqeXZ4eWtwdHdxb2Jlc29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NzE2MTQsImV4cCI6MjEwNDI0NzYxNH0.H9aS3UB43xWpcgY7XLF7Ln38LGJE6EQMtYbitPkmV3Y"
-            self._send_json(200, {
-                "supabaseUrl": s_url,
-                "supabaseAnonKey": s_key
-            })
-            return
-
-        # API: Auth session verification
-        if parsed.path == "/api/auth/me":
-            auth_header = self.headers.get("Authorization", "")
-            token = auth_header.replace("Bearer ", "").strip() if "Bearer " in auth_header else auth_header.strip()
-            if not token:
-                query_params = urllib.parse.parse_qs(parsed.query)
-                token = query_params.get("token", [""])[0]
-            if token and token in AUTH_SESSIONS:
-                self._send_json(200, {"authenticated": True, "user": AUTH_SESSIONS[token]})
-            else:
-                self._send_json(200, {"authenticated": False, "user": None})
-            return
-
-        # Direct High-Speed Static Images Serving
-        if parsed.path.startswith("/images/"):
-            img_rel = parsed.path[len("/images/"):].split("?")[0]
-            img_path = (IMAGES_DIR / img_rel).resolve()
-            if img_path.is_file() and str(img_path).startswith(str(IMAGES_DIR.resolve())):
-                try:
-                    str_p = str(img_path)
-                    if str_p not in _STATIC_IMAGE_CACHE:
-                        with open(img_path, "rb") as f:
-                            _STATIC_IMAGE_CACHE[str_p] = f.read()
-                    data = _STATIC_IMAGE_CACHE[str_p]
-                    suf = img_path.suffix.lower()
-                    mime_type = "image/png" if suf == ".png" else "image/webp" if suf == ".webp" else "image/jpeg"
-                    self.send_response(200)
-                    self.send_header("Content-Type", mime_type)
-                    self.send_header("Content-Length", str(len(data)))
-                    self.send_header("Cache-Control", "public, max-age=86400, immutable")
-                    self.send_header("Access-Control-Allow-Origin", "*")
-                    self.end_headers()
-                    self.wfile.write(data)
-                    return
-                except Exception as e:
-                    print(f"[!] Error serving static image {img_path}: {e}")
-                    self.send_error(500, "Image read error")
-                    return
-            else:
-                self.send_error(404, "Image not found")
+        try:
+            parsed = urllib.parse.urlparse(self.path)
+            
+            # API: Health check
+            if parsed.path == "/api/health":
+                self._send_json(200, {"status": "ok", "healthy": True, "agent_ready": ai_agent is not None, "device": DEVICE})
                 return
-            
-        # API: List sample images with categories & direct image URLs
-        if parsed.path == "/api/samples":
-            sample_files = []
-            if IMAGES_DIR.exists():
-                for f in IMAGES_DIR.iterdir():
-                    if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
-                        fname_lower = f.name.lower()
-                        cat = "road"
-                        friendly_name = f.name
-                        if "pothole" in fname_lower:
+
+            # API: Scan / Job Status Query
+            if parsed.path.startswith("/api/scan/") or parsed.path.startswith("/api/job/"):
+                job_id = parsed.path.split("/")[-1]
+                with SCAN_JOBS_LOCK:
+                    job_data = SCAN_JOBS.get(job_id)
+                if job_data:
+                    self._send_json(200, job_data)
+                else:
+                    self._send_json(404, {"success": False, "status": "failed", "error": f"Job ID '{job_id}' not found"})
+                return
+
+            # API: Supabase configuration
+            if parsed.path == "/api/config":
+                env_data = {}
+                candidate_paths = [
+                    BASE_DIR / ".env",
+                    Path(".env").resolve(),
+                    Path.cwd() / ".env",
+                    Path(__file__).parent / ".env"
+                ]
+                for env_path in candidate_paths:
+                    if env_path.is_file():
+                        try:
+                            with open(env_path, "r", encoding="utf-8") as f:
+                                for line in f:
+                                    line = line.strip()
+                                    if line and not line.startswith("#") and "=" in line:
+                                        k, v = line.split("=", 1)
+                                        env_data[k.strip()] = v.strip()
+                            if env_data.get("SUPABASE_URL"):
+                                break
+                        except Exception:
+                            pass
+                s_url = env_data.get("SUPABASE_URL") or os.getenv("SUPABASE_URL") or "https://byexjyvxykptwqobesor.supabase.co"
+                s_key = env_data.get("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5ZXhqeXZ4eWtwdHdxb2Jlc29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NzE2MTQsImV4cCI6MjEwNDI0NzYxNH0.H9aS3UB43xWpcgY7XLF7Ln38LGJE6EQMtYbitPkmV3Y"
+                self._send_json(200, {
+                    "supabaseUrl": s_url,
+                    "supabaseAnonKey": s_key
+                })
+                return
+
+            # API: Auth session verification
+            if parsed.path == "/api/auth/me":
+                auth_header = self.headers.get("Authorization", "")
+                token = auth_header.replace("Bearer ", "").strip() if "Bearer " in auth_header else auth_header.strip()
+                if not token:
+                    query_params = urllib.parse.parse_qs(parsed.query)
+                    token = query_params.get("token", [""])[0]
+                if token and token in AUTH_SESSIONS:
+                    self._send_json(200, {"authenticated": True, "user": AUTH_SESSIONS[token]})
+                else:
+                    self._send_json(200, {"authenticated": False, "user": None})
+                return
+
+            # Direct High-Speed Static Images Serving
+            if parsed.path.startswith("/images/"):
+                img_rel = parsed.path[len("/images/"):].split("?")[0]
+                img_path = (IMAGES_DIR / img_rel).resolve()
+                if img_path.is_file() and str(img_path).startswith(str(IMAGES_DIR.resolve())):
+                    try:
+                        str_p = str(img_path)
+                        if str_p not in _STATIC_IMAGE_CACHE:
+                            with open(img_path, "rb") as f:
+                                _STATIC_IMAGE_CACHE[str_p] = f.read()
+                        data = _STATIC_IMAGE_CACHE[str_p]
+                        suf = img_path.suffix.lower()
+                        mime_type = "image/png" if suf == ".png" else "image/webp" if suf == ".webp" else "image/jpeg"
+                        self.send_response(200)
+                        self.send_header("Content-Type", mime_type)
+                        self.send_header("Content-Length", str(len(data)))
+                        self.send_header("Cache-Control", "public, max-age=86400, immutable")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        self.wfile.write(data)
+                        return
+                    except Exception as e:
+                        print(f"[!] Error serving static image {img_path}: {e}")
+                        self.send_error(500, "Image read error")
+                        return
+                else:
+                    self.send_error(404, "Image not found")
+                    return
+                
+            # API: List sample images with categories & direct image URLs
+            if parsed.path == "/api/samples":
+                sample_files = []
+                if IMAGES_DIR.exists():
+                    for f in IMAGES_DIR.iterdir():
+                        if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+                            fname_lower = f.name.lower()
                             cat = "road"
-                            friendly_name = "Road Potholes & Cracks"
-                        elif "building" in fname_lower or "wall" in fname_lower:
-                            cat = "building"
-                            friendly_name = "Building Wall Fissures"
-                        elif "bridge" in fname_lower:
-                            cat = "bridge"
-                            friendly_name = "Highway Bridge Structure"
-                        elif "drain" in fname_lower or "water" in fname_lower or "sewer" in fname_lower:
-                            cat = "drainage"
-                            friendly_name = "Stormwater Drainage & Water"
-                        elif "public" in fname_lower or "retaining" in fname_lower or "concrete" in fname_lower:
-                            cat = "other"
-                            friendly_name = "Municipal Concrete Retaining Wall"
-                        elif "image" in fname_lower:
-                            cat = "road"
-                            friendly_name = "Pavement Inspection Photo"
-                        else:
-                            cat = "other"
                             friendly_name = f.name
-                            
-                        sample_files.append({
-                            "name": friendly_name,
-                            "filename": f.name,
-                            "path": str(f.relative_to(BASE_DIR)).replace("\\", "/"),
-                            "image_url": f"/images/{f.name}",
-                            "category": cat,
-                            "size_kb": round(f.stat().st_size / 1024, 1)
-                        })
-            # Sort samples by category order: road, building, bridge, drainage, other
-            cat_order = {"road": 1, "building": 2, "bridge": 3, "drainage": 4, "other": 5}
-            sample_files.sort(key=lambda x: cat_order.get(x["category"], 99))
-            self._send_json(200, {"samples": sample_files})
-            return
-            
-        # API: Dynamic Location & Real-Time Meteorological OSINT Context
-        if parsed.path == "/api/location-context":
-            params = urllib.parse.parse_qs(parsed.query)
-            try:
-                lat = float(params.get("lat", [16.3067])[0])
-                lon = float(params.get("lon", [80.4365])[0])
-            except (ValueError, TypeError):
-                lat, lon = 16.3067, 80.4365
-            source = params.get("source", ["Live GPS / Geolocation"])[0]
-            name = params.get("name", [None])[0]
-            osint_data = fetch_live_osint_context(lat, lon, original_name=name, source=source)
-            self._send_json(200, osint_data)
-            return
+                            if "pothole" in fname_lower:
+                                cat = "road"
+                                friendly_name = "Road Potholes & Cracks"
+                            elif "building" in fname_lower or "wall" in fname_lower:
+                                cat = "building"
+                                friendly_name = "Building Wall Fissures"
+                            elif "bridge" in fname_lower:
+                                cat = "bridge"
+                                friendly_name = "Highway Bridge Structure"
+                            elif "drain" in fname_lower or "water" in fname_lower or "sewer" in fname_lower:
+                                cat = "drainage"
+                                friendly_name = "Stormwater Drainage & Water"
+                            elif "public" in fname_lower or "retaining" in fname_lower or "concrete" in fname_lower:
+                                cat = "other"
+                                friendly_name = "Municipal Concrete Retaining Wall"
+                            elif "image" in fname_lower:
+                                cat = "road"
+                                friendly_name = "Pavement Inspection Photo"
+                            else:
+                                cat = "other"
+                                friendly_name = f.name
+                                
+                            sample_files.append({
+                                "name": friendly_name,
+                                "filename": f.name,
+                                "path": str(f.relative_to(BASE_DIR)).replace("\\", "/"),
+                                "image_url": f"/images/{f.name}",
+                                "category": cat,
+                                "size_kb": round(f.stat().st_size / 1024, 1)
+                            })
+                # Sort samples by category order: road, building, bridge, drainage, other
+                cat_order = {"road": 1, "building": 2, "bridge": 3, "drainage": 4, "other": 5}
+                sample_files.sort(key=lambda x: cat_order.get(x["category"], 99))
+                self._send_json(200, {"samples": sample_files})
+                return
+                
+            # API: Dynamic Location & Real-Time Meteorological OSINT Context
+            if parsed.path == "/api/location-context":
+                params = urllib.parse.parse_qs(parsed.query)
+                try:
+                    lat = float(params.get("lat", [16.3067])[0])
+                    lon = float(params.get("lon", [80.4365])[0])
+                except (ValueError, TypeError):
+                    lat, lon = 16.3067, 80.4365
+                source = params.get("source", ["Live GPS / Geolocation"])[0]
+                name = params.get("name", [None])[0]
+                osint_data = fetch_live_osint_context(lat, lon, original_name=name, source=source)
+                self._send_json(200, osint_data)
+                return
 
-        # API fallback for unmatched /api/* endpoints
-        if parsed.path.startswith("/api/"):
-            self._send_json(404, {"success": False, "status": "failed", "error": f"API endpoint not found: {parsed.path}"})
-            return
+            # API fallback for unmatched /api/* endpoints
+            if parsed.path.startswith("/api/"):
+                self._send_json(404, {"success": False, "status": "failed", "error": f"API endpoint not found: {parsed.path}"})
+                return
 
-        # Serve static web files
-        super().do_GET()
+            # Serve static web files
+            super().do_GET()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._send_json(500, {"success": False, "status": "failed", "error": str(e)})
 
     def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
+        try:
+            parsed = urllib.parse.urlparse(self.path)
         parsed = urllib.parse.urlparse(self.path)
 
         if parsed.path == "/api/auth/login":
@@ -2821,6 +2861,13 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
             return
 
         self._send_json(404, {"success": False, "status": "failed", "error": "Endpoint not found"})
+        except Exception as top_err:
+            import traceback
+            traceback.print_exc()
+            try:
+                self._send_json(500, {"success": False, "status": "failed", "error": f"Internal POST processing error: {str(top_err)}"})
+            except Exception:
+                pass
 
 
 class InspectionCopilotEngine:
