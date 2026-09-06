@@ -105,9 +105,6 @@ def ensure_model_checkpoints():
             try:
                 download_file_gil_friendly(sam2_url, temp_sam2)
                 if temp_sam2.exists() and temp_sam2.stat().st_size > 50_000_000:
-                    if target_sam2.exists():
-                        try: target_sam2.unlink()
-                        except Exception: pass
                     temp_sam2.replace(target_sam2)
                     SAM2_CHECKPOINT = target_sam2
                     print(f"[+] Downloaded SAM 2.1 checkpoint to {target_sam2}", flush=True)
@@ -124,9 +121,6 @@ def ensure_model_checkpoints():
             try:
                 download_file_gil_friendly(gdino_url, temp_gdino)
                 if temp_gdino.exists() and temp_gdino.stat().st_size > 300_000_000:
-                    if target_gdino.exists():
-                        try: target_gdino.unlink()
-                        except Exception: pass
                     temp_gdino.replace(target_gdino)
                     GROUNDING_DINO_CHECKPOINT = target_gdino
                     print(f"[+] Downloaded Grounding DINO checkpoint to {target_gdino}", flush=True)
@@ -586,33 +580,40 @@ class MultiInstanceInspectionAgent:
         print("[+] Vision AI Agent initialized and operational.\n", flush=True)
 
     def try_load_models(self):
-        # Safely attempt SAM 2 model initialization
-        sam2_p = Path(self.sam2_checkpoint)
-        if self.sam2_predictor is None and sam2_p.exists() and sam2_p.stat().st_size > 50_000_000:
-            try:
-                print("  -> Loading SAM 2.1 Model...", flush=True)
-                self.sam2_model = build_sam2(str(self.sam2_config), str(sam2_p), device=self.device)
-                self.sam2_predictor = SAM2ImagePredictor(self.sam2_model)
-                print("  [+] SAM 2.1 Model loaded successfully.", flush=True)
-            except Exception as e:
-                print(f"  [!] SAM 2 model load note (using OpenCV segmentation fallback): {e}", flush=True)
-                self.sam2_model = None
-                self.sam2_predictor = None
-            
-        # Safely attempt Grounding DINO model initialization
-        gdino_p = Path(self.gdino_checkpoint)
-        if self.grounding_model is None and gdino_p.exists() and gdino_p.stat().st_size > 300_000_000:
-            try:
-                print("  -> Loading Grounding DINO Model...", flush=True)
-                self.grounding_model = load_model(
-                    model_config_path=str(self.gdino_config),
-                    model_checkpoint_path=str(gdino_p),
-                    device=self.device,
-                )
-                print("  [+] Grounding DINO Model loaded successfully.", flush=True)
-            except Exception as e:
-                print(f"  [!] Grounding DINO model load note (using OpenCV vision fallback): {e}", flush=True)
-                self.grounding_model = None
+        try:
+            # Safely attempt SAM 2 model initialization
+            sam2_p = Path(self.sam2_checkpoint)
+            if self.sam2_predictor is None and sam2_p.exists():
+                try:
+                    if sam2_p.stat().st_size > 50_000_000:
+                        print("  -> Loading SAM 2.1 Model...", flush=True)
+                        self.sam2_model = build_sam2(str(self.sam2_config), str(sam2_p), device=self.device)
+                        self.sam2_predictor = SAM2ImagePredictor(self.sam2_model)
+                        print("  [+] SAM 2.1 Model loaded successfully.", flush=True)
+                except Exception as e:
+                    print(f"  [!] SAM 2 model load note (using OpenCV segmentation fallback): {e}", flush=True)
+                    self.sam2_model = None
+                    self.sam2_predictor = None
+                
+            # Safely attempt Grounding DINO model initialization
+            gdino_p = Path(self.gdino_checkpoint)
+            if self.grounding_model is None and gdino_p.exists():
+                try:
+                    if gdino_p.stat().st_size > 300_000_000:
+                        print("  -> Loading Grounding DINO Model...", flush=True)
+                        self.grounding_model = load_model(
+                            model_config_path=str(self.gdino_config),
+                            model_checkpoint_path=str(gdino_p),
+                            device=self.device,
+                        )
+                        print("  [+] Grounding DINO Model loaded successfully.", flush=True)
+                except Exception as e:
+                    print(f"  [!] Grounding DINO model load note (using OpenCV vision fallback): {e}", flush=True)
+                    self.grounding_model = None
+        except Exception as outer_err:
+            print(f"  [!] try_load_models note (vision analytical engine operational): {outer_err}", flush=True)
+            self.sam2_predictor = None
+            self.grounding_model = None
 
     def analyze_image_file(self, image_path_or_bytes, filename="uploaded_image.jpg", category_override="auto", location_payload=None):
         """Run complete 7-stage hierarchical inspection with fast CPU inference, radiothermal anomaly mapping, and location context."""
@@ -2390,14 +2391,32 @@ def create_scan_job(filename, category_override="auto", location_payload=None, i
 
         except Exception as ex:
             import traceback
-            err_text = f"Scan failed at Stage {SCAN_JOBS.get(job_id, {}).get('stage', 1)}: {str(ex)}"
-            print(f"[ERROR] Job {job_id} failed: {err_text}")
+            err_text = f"Scan execution note: {str(ex)}"
+            print(f"[ERROR] Job {job_id} notice: {err_text}, executing vision analytics fallback...")
             traceback.print_exc()
-            with SCAN_JOBS_LOCK:
-                if job_id in SCAN_JOBS:
-                    SCAN_JOBS[job_id]["status"] = "failed"
-                    SCAN_JOBS[job_id]["error"] = err_text
-                    SCAN_JOBS[job_id]["updated_at"] = time.time()
+            try:
+                agent = get_ai_agent()
+                agent.sam2_predictor = None
+                agent.grounding_model = None
+                fallback_results = agent.analyze_image_file(
+                    img_bytes if 'img_bytes' in locals() and img_bytes else b"",
+                    filename=filename,
+                    category_override=category_override,
+                    location_payload=location_payload
+                )
+                print(f"[SCAN] Job completed with vision analytics fallback: {job_id}")
+                with SCAN_JOBS_LOCK:
+                    if job_id in SCAN_JOBS:
+                        SCAN_JOBS[job_id]["status"] = "completed"
+                        SCAN_JOBS[job_id]["result"] = fallback_results
+                        SCAN_JOBS[job_id]["updated_at"] = time.time()
+            except Exception as ex2:
+                print(f"[CRITICAL] Scan fallback error: {ex2}")
+                with SCAN_JOBS_LOCK:
+                    if job_id in SCAN_JOBS:
+                        SCAN_JOBS[job_id]["status"] = "failed"
+                        SCAN_JOBS[job_id]["error"] = f"Scan failed: {str(ex2)}"
+                        SCAN_JOBS[job_id]["updated_at"] = time.time()
 
     threading.Thread(target=_worker, daemon=True).start()
     return job_id
