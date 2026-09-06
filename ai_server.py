@@ -72,6 +72,16 @@ SAM2_MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_t.yaml"
 GROUNDING_DINO_CONFIG = BASE_DIR / "grounding_dino" / "groundingdino" / "config" / "GroundingDINO_SwinT_OGC.py"
 GROUNDING_DINO_CHECKPOINT = BASE_DIR / "gdino_checkpoints" / "groundingdino_swint_ogc.pth"
 
+def download_file_gil_friendly(url, target_path):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req) as resp, open(target_path, "wb") as out_file:
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            out_file.write(chunk)
+            time.sleep(0.005)
+
 def ensure_model_checkpoints():
     global SAM2_CHECKPOINT, GROUNDING_DINO_CHECKPOINT
     
@@ -88,24 +98,24 @@ def ensure_model_checkpoints():
     def _bg_download():
         global SAM2_CHECKPOINT, GROUNDING_DINO_CHECKPOINT
         if not SAM2_CHECKPOINT.exists():
-            print("[*] Downloading SAM 2.1 Hiera Tiny checkpoint from official Meta repository...", flush=True)
+            print("[*] Downloading SAM 2.1 Hiera Tiny checkpoint...", flush=True)
             sam2_url = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt"
             target_path = BASE_DIR / "sam2.1_hiera_tiny.pt"
             try:
-                urllib.request.urlretrieve(sam2_url, target_path)
+                download_file_gil_friendly(sam2_url, target_path)
                 SAM2_CHECKPOINT = target_path
                 print(f"[+] Downloaded SAM 2.1 checkpoint to {target_path}", flush=True)
             except Exception as e:
                 print(f"[!] Error downloading SAM 2 checkpoint: {e}", flush=True)
 
         if not GROUNDING_DINO_CHECKPOINT.exists():
-            print("[*] Downloading Grounding DINO Swin-T checkpoint from official IDEA-Research repository...", flush=True)
+            print("[*] Downloading Grounding DINO Swin-T checkpoint...", flush=True)
             gdino_url = "https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
             gdino_dir = BASE_DIR / "gdino_checkpoints"
             gdino_dir.mkdir(parents=True, exist_ok=True)
             target_path = gdino_dir / "groundingdino_swint_ogc.pth"
             try:
-                urllib.request.urlretrieve(gdino_url, target_path)
+                download_file_gil_friendly(gdino_url, target_path)
                 GROUNDING_DINO_CHECKPOINT = target_path
                 print(f"[+] Downloaded Grounding DINO checkpoint to {target_path}", flush=True)
             except Exception as e:
