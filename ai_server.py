@@ -2665,24 +2665,6 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                     return
                     
                 category_override = data.get("category", "auto") if "application/json" in content_type else "auto"
-                is_async = (data.get("mode") == "async" or data.get("async") is True or "async" in parsed.query)
-
-                if is_async:
-                    job_id = create_scan_job(
-                        filename=filename,
-                        category_override=category_override,
-                        location_payload=location_payload,
-                        image_bytes=image_bytes,
-                        sample_path=sample_rel_path
-                    )
-                    self._send_json(202, {
-                        "success": True,
-                        "job_id": job_id,
-                        "status": "queued",
-                        "message": "Scan job successfully queued"
-                    })
-                    return
-
                 img_hash = hashlib.md5(image_bytes).hexdigest()
                 loc_lat = round(float(location_payload.get('latitude', 16.3067)), 3) if location_payload else 16.307
                 loc_lon = round(float(location_payload.get('longitude', 80.4365)), 3) if location_payload else 80.437
@@ -2703,6 +2685,26 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                         cached_res["status"] = "completed"
                         self._send_json(200, cached_res)
                         return
+
+                # For uncached scans, default to async job mode to avoid Render HTTP 30-second proxy 502 timeouts
+                is_sync = (data.get("mode") == "sync" or data.get("sync") is True or "sync" in parsed.query)
+                is_async = not is_sync
+
+                if is_async:
+                    job_id = create_scan_job(
+                        filename=filename,
+                        category_override=category_override,
+                        location_payload=location_payload,
+                        image_bytes=image_bytes,
+                        sample_path=sample_rel_path
+                    )
+                    self._send_json(202, {
+                        "success": True,
+                        "job_id": job_id,
+                        "status": "queued",
+                        "message": "Scan job successfully queued"
+                    })
+                    return
 
                 print(f"\n[API] Processing inspection request for: {filename} (Category: {category_override})")
                 with _INFERENCE_LOCK:

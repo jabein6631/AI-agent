@@ -948,7 +948,8 @@ async function runAnalysisForBase64(base64Data, filename) {
         image_base64: base64Data,
         filename: filename,
         category: categoryOverride,
-        location: state.location
+        location: state.location,
+        mode: 'async'
       }),
       signal: controller.signal
     });
@@ -978,7 +979,8 @@ async function runAnalysisForSample(samplePath, filename) {
         sample_path: samplePath,
         filename: filename,
         category: categoryOverride,
-        location: state.location
+        location: state.location,
+        mode: 'async'
       }),
       signal: controller.signal
     });
@@ -1112,7 +1114,8 @@ async function runAnalysisForFile(file) {
         image_base64: base64Data,
         filename: file.name,
         category: 'auto',
-        location: state.location
+        location: state.location,
+        mode: 'async'
       }),
       signal: controller.signal
     });
