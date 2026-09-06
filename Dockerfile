@@ -1,37 +1,43 @@
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+FROM python:3.10-slim
 
-# Arguments to build Docker Image using CUDA
-ARG USE_CUDA=0
-ARG TORCH_ARCH="7.0;7.5;8.0;8.6"
+# System dependencies for OpenCV, PyTorch CPU, and Media processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV AM_I_DOCKER=True
-ENV BUILD_WITH_CUDA="${USE_CUDA}"
-ENV TORCH_CUDA_ARCH_LIST="${TORCH_ARCH}"
-ENV CUDA_HOME=/usr/local/cuda-12.1/
-# Ensure CUDA is correctly set up
-ENV PATH=/usr/local/cuda-12.1/bin:${PATH}
-ENV LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:${LD_LIBRARY_PATH}
+WORKDIR /app
 
-# Install required packages and specific gcc/g++
-RUN apt-get update && apt-get install --no-install-recommends wget ffmpeg=7:* \
-    libsm6=2:* libxext6=2:* git=1:* nano vim=2:* ninja-build gcc-10 g++-10 -y \
-    && apt-get clean && apt-get autoremove && rm -rf /var/lib/apt/lists/*
+# Upgrade pip
+RUN python -m pip install --no-cache-dir --upgrade pip "setuptools>=62.3.0,<75.9" wheel
 
-ENV CC=gcc-10
-ENV CXX=g++-10
+# Install PyTorch CPU version
+RUN python -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-RUN mkdir -p /home/appuser/Grounded-SAM-2
-COPY . /home/appuser/Grounded-SAM-2/
+# Copy project files
+COPY . /app
 
-WORKDIR /home/appuser/Grounded-SAM-2
+# Install project python dependencies
+RUN python -m pip install --no-cache-dir opencv-python-headless pillow numpy hydra-core omegaconf huggingface_hub
 
+# Install SAM 2 and Grounding DINO packages in editable mode
+RUN python -m pip install --no-cache-dir -e .
+RUN python -m pip install --no-cache-dir --no-build-isolation -e grounding_dino || true
 
-# Install essential Python packages
-RUN python -m pip install --upgrade pip "setuptools>=62.3.0,<75.9" wheel numpy \
-    opencv-python transformers supervision pycocotools addict yapf timm
+# Pre-download SAM 2.1 and Grounding DINO checkpoints during Docker build
+RUN mkdir -p gdino_checkpoints && \
+    curl -L -o sam2.1_hiera_tiny.pt https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt && \
+    curl -L -o gdino_checkpoints/groundingdino_swint_ogc.pth https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
 
-# Install segment_anything package in editable mode
-RUN python -m pip install -e .
+# Set environment for Hugging Face Spaces (Default Port 7860)
+ENV PORT=7860
+EXPOSE 7860
 
-# Install grounding dino 
-RUN python -m pip install --no-build-isolation -e grounding_dino
+# Run AI Backend Server on Port 7860
+CMD ["python", "ai_server.py", "--port", "7860"]

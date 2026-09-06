@@ -4133,7 +4133,8 @@ def prewarm_sample_cache():
 
 def run_server(port=None):
     if port is None:
-        port = int(os.environ.get("PORT", 10000))
+        default_port = 7860 if (os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID")) else 10000
+        port = int(os.environ.get("PORT", default_port))
     host = "0.0.0.0"
     print("=" * 70)
     print(" AI INFRASTRUCTURE INSPECTION AGENT - WEB SERVER & CV ENGINE")
