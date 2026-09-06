@@ -2698,7 +2698,7 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                         image_bytes=image_bytes,
                         sample_path=sample_rel_path
                     )
-                    self._send_json(202, {
+                    self._send_json(200, {
                         "success": True,
                         "job_id": job_id,
                         "status": "queued",
