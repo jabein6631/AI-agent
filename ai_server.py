@@ -4016,10 +4016,9 @@ def generate_ai_chat_response(query, stage_num, analysis, extra_payload=None):
 
 
 def prewarm_sample_cache():
-    time.sleep(0.5)
-    print("[*] Pre-warming sample inspection cache in background for instant UI response...", flush=True)
+    time.sleep(0.1)
+    print("[*] Pre-caching static sample image bytes...", flush=True)
     if IMAGES_DIR.exists():
-        # Pre-cache static image bytes first for instant loading
         for s_file in IMAGES_DIR.iterdir():
             if s_file.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 try:
@@ -4029,20 +4028,7 @@ def prewarm_sample_cache():
                             _STATIC_IMAGE_CACHE[str_p] = f.read()
                 except Exception as e:
                     print(f"[!] Pre-cache bytes note on {s_file.name}: {e}", flush=True)
-        
-        # Pre-warm AI inspection results in priority order (image.png, pothole.jpg first)
-        ordered_files = sorted(IMAGES_DIR.iterdir(), key=lambda f: 0 if "image" in f.name.lower() or "pothole" in f.name.lower() else 1)
-        for s_file in ordered_files:
-            if s_file.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
-                try:
-                    agent = get_ai_agent()
-                    raw_b = _STATIC_IMAGE_CACHE.get(str(s_file.resolve()))
-                    if raw_b:
-                        agent.analyze_image_file(raw_b, filename=s_file.name)
-                        print(f"  [+] Pre-warmed AI inspection cache for: {s_file.name}", flush=True)
-                except Exception as e:
-                    print(f"[!] Prewarm note on {s_file.name}: {e}", flush=True)
-    print("[+] Sample inspection cache ready for instantaneous loading!\n", flush=True)
+    print("[+] Sample image bytes cached for high-speed serving!\n", flush=True)
 
 
 def run_server(port=None):
