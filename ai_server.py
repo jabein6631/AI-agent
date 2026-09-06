@@ -2598,269 +2598,268 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         try:
             parsed = urllib.parse.urlparse(self.path)
-        parsed = urllib.parse.urlparse(self.path)
 
-        if parsed.path == "/api/auth/login":
-            try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(content_length)
-                data = json.loads(body.decode("utf-8")) if body else {}
-                
-                if data.get("demo"):
-                    demo_user = {
-                        "id": "u_demo_instant",
-                        "name": "Demo Inspector",
-                        "email": "demo@infra.ai",
-                        "organization": "Infrastructure Vision Labs",
-                        "role": "Lead Senior Inspector"
-                    }
-                    token, user_data = _create_session(demo_user)
+            if parsed.path == "/api/auth/login":
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                    body = self.rfile.read(content_length)
+                    data = json.loads(body.decode("utf-8")) if body else {}
+                    
+                    if data.get("demo"):
+                        demo_user = {
+                            "id": "u_demo_instant",
+                            "name": "Demo Inspector",
+                            "email": "demo@infra.ai",
+                            "organization": "Infrastructure Vision Labs",
+                            "role": "Lead Senior Inspector"
+                        }
+                        token, user_data = _create_session(demo_user)
+                        self._send_json(200, {"status": "ok", "token": token, "user": user_data})
+                        return
+                    
+                    email = data.get("email", "").strip().lower()
+                    password = data.get("password", "")
+                    
+                    if not email or not password:
+                        self._send_json(400, {"error": "Please provide both email and password."})
+                        return
+                    
+                    users = _load_users()
+                    user = users.get(email)
+                    if not user or user.get("password_hash") != _hash_pass(password):
+                        self._send_json(401, {"error": "Invalid email or password."})
+                        return
+                    
+                    token, user_data = _create_session(user)
                     self._send_json(200, {"status": "ok", "token": token, "user": user_data})
                     return
-                
-                email = data.get("email", "").strip().lower()
-                password = data.get("password", "")
-                
-                if not email or not password:
-                    self._send_json(400, {"error": "Please provide both email and password."})
-                    return
-                
-                users = _load_users()
-                user = users.get(email)
-                if not user or user.get("password_hash") != _hash_pass(password):
-                    self._send_json(401, {"error": "Invalid email or password."})
-                    return
-                
-                token, user_data = _create_session(user)
-                self._send_json(200, {"status": "ok", "token": token, "user": user_data})
-                return
-            except Exception as e:
-                self._send_json(500, {"error": f"Login processing error: {str(e)}"})
-                return
-
-        if parsed.path == "/api/auth/signup":
-            try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(content_length)
-                data = json.loads(body.decode("utf-8")) if body else {}
-                
-                name = data.get("name", "").strip()
-                email = data.get("email", "").strip().lower()
-                password = data.get("password", "")
-                organization = data.get("organization", "").strip() or "Civil Engineering Dept"
-                role = data.get("role", "").strip() or "Senior Inspector"
-                
-                if not name or not email or not password:
-                    self._send_json(400, {"error": "Full name, email address, and password are required."})
-                    return
-                
-                if len(password) < 4:
-                    self._send_json(400, {"error": "Password must be at least 4 characters long."})
+                except Exception as e:
+                    self._send_json(500, {"error": f"Login processing error: {str(e)}"})
                     return
 
-                users = _load_users()
-                if email in users:
-                    self._send_json(400, {"error": "An account with this email address already exists."})
-                    return
-                
-                new_id = f"u_{os.urandom(4).hex()}"
-                new_user = {
-                    "id": new_id,
-                    "name": name,
-                    "email": email,
-                    "password_hash": _hash_pass(password),
-                    "organization": organization,
-                    "role": role,
-                    "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
-                users[email] = new_user
-                _save_users(users)
-                
-                token, user_data = _create_session(new_user)
-                self._send_json(201, {"status": "ok", "token": token, "user": user_data})
-                return
-            except Exception as e:
-                self._send_json(500, {"error": f"Signup processing error: {str(e)}"})
-                return
-
-        if parsed.path == "/api/auth/logout":
-            auth_header = self.headers.get("Authorization", "")
-            token = auth_header.replace("Bearer ", "").strip() if "Bearer " in auth_header else auth_header.strip()
-            if token in AUTH_SESSIONS:
-                del AUTH_SESSIONS[token]
-            self._send_json(200, {"status": "ok", "message": "Logged out successfully"})
-            return
-
-        if parsed.path in ("/api/analyze", "/api/scan"):
-            try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(content_length)
-                content_type = self.headers.get("Content-Type", "")
-                
-                image_bytes = None
-                filename = "uploaded_inspection.jpg"
-                location_payload = None
-                sample_rel_path = None
-                data = {}
-                
-                if "application/json" in content_type:
+            if parsed.path == "/api/auth/signup":
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                    body = self.rfile.read(content_length)
                     data = json.loads(body.decode("utf-8")) if body else {}
-                    if "image_base64" in data:
-                        b64_str = data["image_base64"]
-                        if "," in b64_str:
-                            b64_str = b64_str.split(",", 1)[1]
-                        image_bytes = base64.b64decode(b64_str)
-                    elif "sample_path" in data:
-                        sample_rel_path = data["sample_path"]
-                        sample_path = BASE_DIR / sample_rel_path
-                        if sample_path.exists():
-                            with open(sample_path, "rb") as f:
-                                image_bytes = f.read()
-                            filename = sample_path.name
-                    if "filename" in data:
-                        filename = data["filename"]
-                    if "location" in data:
-                        location_payload = data["location"]
-                elif "multipart/form-data" in content_type:
-                    # Robust boundary parsing
-                    boundary = ""
-                    for param in content_type.split(";"):
-                        param = param.strip()
-                        if param.lower().startswith("boundary="):
-                            boundary = param[9:].strip('"\';')
-                            break
-                    if boundary:
-                        b_boundary = ("--" + boundary).encode("latin-1")
-                        parts = body.split(b_boundary)
-                        for part in parts:
-                            if b"filename=" in part:
-                                if b"\r\n\r\n" in part:
-                                    header_part, content_part = part.split(b"\r\n\r\n", 1)
-                                    for line in header_part.split(b"\r\n"):
-                                        if b"filename=" in line:
-                                            fname_part = line.split(b"filename=")[-1].strip(b'"\r\n ')
-                                            filename = fname_part.decode("utf-8", errors="ignore")
-                                    image_bytes = content_part.rstrip(b"\r\n-")
-                                    break
-                            
-                if not image_bytes:
-                    self._send_json(400, {"success": False, "status": "failed", "error": "No image payload provided"})
-                    return
                     
-                category_override = data.get("category", "auto") if "application/json" in content_type else "auto"
-                img_hash = hashlib.md5(image_bytes).hexdigest()
-                loc_lat = round(float(location_payload.get('latitude', 16.3067)), 3) if location_payload else 16.307
-                loc_lon = round(float(location_payload.get('longitude', 80.4365)), 3) if location_payload else 80.437
-                
-                cache_keys = [
-                    f"{img_hash}_{filename}_{category_override}_{loc_lat}_{loc_lon}",
-                    f"{img_hash}_{filename}_{category_override}",
-                    f"{img_hash}_{filename}_auto",
-                    f"{filename}_{category_override}",
-                    f"{filename}_auto"
-                ]
-                
-                for ck in cache_keys:
-                    if ck in INSPECTION_CACHE:
-                        print(f"\n[+] Returning cached inspection results for: {filename} ({ck[:12]})")
-                        cached_res = dict(INSPECTION_CACHE[ck])
-                        cached_res["success"] = True
-                        cached_res["status"] = "completed"
-                        self._send_json(200, cached_res)
+                    name = data.get("name", "").strip()
+                    email = data.get("email", "").strip().lower()
+                    password = data.get("password", "")
+                    organization = data.get("organization", "").strip() or "Civil Engineering Dept"
+                    role = data.get("role", "").strip() or "Senior Inspector"
+                    
+                    if not name or not email or not password:
+                        self._send_json(400, {"error": "Full name, email address, and password are required."})
+                        return
+                    
+                    if len(password) < 4:
+                        self._send_json(400, {"error": "Password must be at least 4 characters long."})
                         return
 
-                # For uncached scans, default to async job mode to avoid Render HTTP 30-second proxy 502 timeouts
-                is_sync = (data.get("mode") == "sync" or data.get("sync") is True or "sync" in parsed.query)
-                is_async = not is_sync
-
-                if is_async:
-                    job_id = create_scan_job(
-                        filename=filename,
-                        category_override=category_override,
-                        location_payload=location_payload,
-                        image_bytes=image_bytes,
-                        sample_path=sample_rel_path
-                    )
-                    self._send_json(200, {
-                        "success": True,
-                        "job_id": job_id,
-                        "status": "queued",
-                        "message": "Scan job successfully queued"
-                    })
+                    users = _load_users()
+                    if email in users:
+                        self._send_json(400, {"error": "An account with this email address already exists."})
+                        return
+                    
+                    new_id = f"u_{os.urandom(4).hex()}"
+                    new_user = {
+                        "id": new_id,
+                        "name": name,
+                        "email": email,
+                        "password_hash": _hash_pass(password),
+                        "organization": organization,
+                        "role": role,
+                        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    }
+                    users[email] = new_user
+                    _save_users(users)
+                    
+                    token, user_data = _create_session(new_user)
+                    self._send_json(201, {"status": "ok", "token": token, "user": user_data})
+                    return
+                except Exception as e:
+                    self._send_json(500, {"error": f"Signup processing error: {str(e)}"})
                     return
 
-                print(f"\n[API] Processing inspection request for: {filename} (Category: {category_override})")
-                with _INFERENCE_LOCK:
+            if parsed.path == "/api/auth/logout":
+                auth_header = self.headers.get("Authorization", "")
+                token = auth_header.replace("Bearer ", "").strip() if "Bearer " in auth_header else auth_header.strip()
+                if token in AUTH_SESSIONS:
+                    del AUTH_SESSIONS[token]
+                self._send_json(200, {"status": "ok", "message": "Logged out successfully"})
+                return
+
+            if parsed.path in ("/api/analyze", "/api/scan"):
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                    body = self.rfile.read(content_length)
+                    content_type = self.headers.get("Content-Type", "")
+                    
+                    image_bytes = None
+                    filename = "uploaded_inspection.jpg"
+                    location_payload = None
+                    sample_rel_path = None
+                    data = {}
+                    
+                    if "application/json" in content_type:
+                        data = json.loads(body.decode("utf-8")) if body else {}
+                        if "image_base64" in data:
+                            b64_str = data["image_base64"]
+                            if "," in b64_str:
+                                b64_str = b64_str.split(",", 1)[1]
+                            image_bytes = base64.b64decode(b64_str)
+                        elif "sample_path" in data:
+                            sample_rel_path = data["sample_path"]
+                            sample_path = BASE_DIR / sample_rel_path
+                            if sample_path.exists():
+                                with open(sample_path, "rb") as f:
+                                    image_bytes = f.read()
+                                filename = sample_path.name
+                        if "filename" in data:
+                            filename = data["filename"]
+                        if "location" in data:
+                            location_payload = data["location"]
+                    elif "multipart/form-data" in content_type:
+                        # Robust boundary parsing
+                        boundary = ""
+                        for param in content_type.split(";"):
+                            param = param.strip()
+                            if param.lower().startswith("boundary="):
+                                boundary = param[9:].strip('"\';')
+                                break
+                        if boundary:
+                            b_boundary = ("--" + boundary).encode("latin-1")
+                            parts = body.split(b_boundary)
+                            for part in parts:
+                                if b"filename=" in part:
+                                    if b"\r\n\r\n" in part:
+                                        header_part, content_part = part.split(b"\r\n\r\n", 1)
+                                        for line in header_part.split(b"\r\n"):
+                                            if b"filename=" in line:
+                                                fname_part = line.split(b"filename=")[-1].strip(b'"\r\n ')
+                                                filename = fname_part.decode("utf-8", errors="ignore")
+                                        image_bytes = content_part.rstrip(b"\r\n-")
+                                        break
+                                
+                    if not image_bytes:
+                        self._send_json(400, {"success": False, "status": "failed", "error": "No image payload provided"})
+                        return
+                        
+                    category_override = data.get("category", "auto") if "application/json" in content_type else "auto"
+                    img_hash = hashlib.md5(image_bytes).hexdigest()
+                    loc_lat = round(float(location_payload.get('latitude', 16.3067)), 3) if location_payload else 16.307
+                    loc_lon = round(float(location_payload.get('longitude', 80.4365)), 3) if location_payload else 80.437
+                    
+                    cache_keys = [
+                        f"{img_hash}_{filename}_{category_override}_{loc_lat}_{loc_lon}",
+                        f"{img_hash}_{filename}_{category_override}",
+                        f"{img_hash}_{filename}_auto",
+                        f"{filename}_{category_override}",
+                        f"{filename}_auto"
+                    ]
+                    
                     for ck in cache_keys:
                         if ck in INSPECTION_CACHE:
+                            print(f"\n[+] Returning cached inspection results for: {filename} ({ck[:12]})")
                             cached_res = dict(INSPECTION_CACHE[ck])
                             cached_res["success"] = True
                             cached_res["status"] = "completed"
                             self._send_json(200, cached_res)
                             return
-                    agent = get_ai_agent()
-                    results = agent.analyze_image_file(
-                        image_bytes,
-                        filename=filename,
-                        category_override=category_override,
-                        location_payload=location_payload
-                    )
-                    INSPECTION_CACHE[cache_keys[0]] = results
-                    INSPECTION_CACHE[cache_keys[1]] = results
-                    INSPECTION_CACHE[cache_keys[3]] = results
 
-                    persist_analysis_to_supabase(image_bytes, filename, results, location_payload)
+                    # For uncached scans, default to async job mode to avoid Render HTTP 30-second proxy 502 timeouts
+                    is_sync = (data.get("mode") == "sync" or data.get("sync") is True or "sync" in parsed.query)
+                    is_async = not is_sync
 
-                results["success"] = True
-                results["status"] = "completed"
-                self._send_json(200, results)
-                
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                self._send_json(500, {
-                    "success": False,
-                    "status": "failed",
-                    "error": str(e),
-                    "traceback": traceback.format_exc()
-                })
-            return
-            
-        elif parsed.path in ("/api/chat", "/api/copilot/chat"):
-            try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(content_length)
-                payload = json.loads(body.decode("utf-8"))
-                
-                query = (payload.get("message") or payload.get("query") or "").strip()
-                stage_num = int(payload.get("stage", 1))
-                analysis = payload.get("analysis", {})
-                
-                response_data = generate_ai_chat_response(query, stage_num, analysis, extra_payload=payload)
-                if isinstance(response_data, dict):
-                    self._send_json(200, {
-                        "reply": response_data.get("reply", ""),
-                        "action": response_data.get("action", None),
-                        "stage": response_data.get("stage", stage_num),
-                        "status": "ok"
+                    if is_async:
+                        job_id = create_scan_job(
+                            filename=filename,
+                            category_override=category_override,
+                            location_payload=location_payload,
+                            image_bytes=image_bytes,
+                            sample_path=sample_rel_path
+                        )
+                        self._send_json(200, {
+                            "success": True,
+                            "job_id": job_id,
+                            "status": "queued",
+                            "message": "Scan job successfully queued"
+                        })
+                        return
+
+                    print(f"\n[API] Processing inspection request for: {filename} (Category: {category_override})")
+                    with _INFERENCE_LOCK:
+                        for ck in cache_keys:
+                            if ck in INSPECTION_CACHE:
+                                cached_res = dict(INSPECTION_CACHE[ck])
+                                cached_res["success"] = True
+                                cached_res["status"] = "completed"
+                                self._send_json(200, cached_res)
+                                return
+                        agent = get_ai_agent()
+                        results = agent.analyze_image_file(
+                            image_bytes,
+                            filename=filename,
+                            category_override=category_override,
+                            location_payload=location_payload
+                        )
+                        INSPECTION_CACHE[cache_keys[0]] = results
+                        INSPECTION_CACHE[cache_keys[1]] = results
+                        INSPECTION_CACHE[cache_keys[3]] = results
+
+                        persist_analysis_to_supabase(image_bytes, filename, results, location_payload)
+
+                    results["success"] = True
+                    results["status"] = "completed"
+                    self._send_json(200, results)
+                    
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    self._send_json(500, {
+                        "success": False,
+                        "status": "failed",
+                        "error": str(e),
+                        "traceback": traceback.format_exc()
                     })
-                else:
-                    self._send_json(200, {
-                        "reply": str(response_data),
-                        "stage": stage_num,
-                        "status": "ok"
-                    })
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                self._send_json(500, {"error": str(e), "traceback": traceback.format_exc()})
-            return
+                return
+                
+            elif parsed.path in ("/api/chat", "/api/copilot/chat"):
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                    body = self.rfile.read(content_length)
+                    payload = json.loads(body.decode("utf-8"))
+                    
+                    query = (payload.get("message") or payload.get("query") or "").strip()
+                    stage_num = int(payload.get("stage", 1))
+                    analysis = payload.get("analysis", {})
+                    
+                    response_data = generate_ai_chat_response(query, stage_num, analysis, extra_payload=payload)
+                    if isinstance(response_data, dict):
+                        self._send_json(200, {
+                            "reply": response_data.get("reply", ""),
+                            "action": response_data.get("action", None),
+                            "stage": response_data.get("stage", stage_num),
+                            "status": "ok"
+                        })
+                    else:
+                        self._send_json(200, {
+                            "reply": str(response_data),
+                            "stage": stage_num,
+                            "status": "ok"
+                        })
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    self._send_json(500, {"error": str(e), "traceback": traceback.format_exc()})
+                return
 
-        if parsed.path.startswith("/api/"):
-            self._send_json(404, {"success": False, "status": "failed", "error": f"API endpoint not found: {parsed.path}"})
-            return
+            if parsed.path.startswith("/api/"):
+                self._send_json(404, {"success": False, "status": "failed", "error": f"API endpoint not found: {parsed.path}"})
+                return
 
-        self._send_json(404, {"success": False, "status": "failed", "error": "Endpoint not found"})
+            self._send_json(404, {"success": False, "status": "failed", "error": "Endpoint not found"})
         except Exception as top_err:
             import traceback
             traceback.print_exc()
