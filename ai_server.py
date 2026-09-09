@@ -2470,7 +2470,7 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
             parsed = urllib.parse.urlparse(self.path)
             
             # API: Health check
-            if parsed.path == "/api/health":
+            if parsed.path in ["/api/health", "/health", "/healthz"]:
                 self._send_json(200, {"status": "ok", "healthy": True, "agent_ready": ai_agent is not None, "device": DEVICE})
                 return
 

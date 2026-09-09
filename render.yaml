@@ -2,8 +2,9 @@ services:
   - type: web
     name: ai-infrastructure-agent
     env: python
-    buildCommand: SAM2_BUILD_CUDA=0 pip install -r requirements.txt && SAM2_BUILD_CUDA=0 pip install -e . && python download_models.py
+    buildCommand: SAM2_BUILD_CUDA=0 pip install --no-cache-dir -r requirements.txt && SAM2_BUILD_CUDA=0 pip install --no-cache-dir -e .
     startCommand: python ai_server.py
+    healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: 10000
