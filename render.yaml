@@ -2,10 +2,12 @@ services:
   - type: web
     name: ai-infrastructure-agent
     env: python
-    buildCommand: SAM2_BUILD_CUDA=0 pip install -r requirements.txt && SAM2_BUILD_CUDA=0 pip install -e .
+    buildCommand: SAM2_BUILD_CUDA=0 pip install -r requirements.txt && SAM2_BUILD_CUDA=0 pip install -e . && python download_models.py
     startCommand: python ai_server.py
     envVars:
       - key: PORT
         value: 10000
       - key: SAM2_BUILD_CUDA
         value: "0"
+      - key: PYTHONUNBUFFERED
+        value: "1"

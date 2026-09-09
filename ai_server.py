@@ -72,58 +72,75 @@ SAM2_MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_t.yaml"
 GROUNDING_DINO_CONFIG = BASE_DIR / "grounding_dino" / "groundingdino" / "config" / "GroundingDINO_SwinT_OGC.py"
 GROUNDING_DINO_CHECKPOINT = BASE_DIR / "gdino_checkpoints" / "groundingdino_swint_ogc.pth"
 
-def download_file_gil_friendly(url, target_path):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req) as resp, open(target_path, "wb") as out_file:
+def download_file_gil_friendly(url, target_path, min_bytes=100 * 1024 * 1024):
+    target_path = Path(target_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = target_path.with_suffix(target_path.suffix + ".tmp")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) InfrastructureAgent/1.0"})
+    with urllib.request.urlopen(req, timeout=120) as resp, open(tmp_path, "wb") as out_file:
         while True:
-            chunk = resp.read(65536)
+            chunk = resp.read(1024 * 1024)
             if not chunk:
                 break
             out_file.write(chunk)
-            time.sleep(0.005)
+    if tmp_path.stat().st_size >= min_bytes:
+        os.replace(tmp_path, target_path)
+    else:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise ValueError(f"Downloaded file {tmp_path.name} is smaller than minimum size ({min_bytes} bytes).")
 
 def ensure_model_checkpoints():
     global SAM2_CHECKPOINT, GROUNDING_DINO_CHECKPOINT
     
-    if not SAM2_CHECKPOINT.exists() or SAM2_CHECKPOINT.stat().st_size < 50_000_000:
+    # Remove any corrupted partial checkpoint files
+    if SAM2_CHECKPOINT.exists() and SAM2_CHECKPOINT.stat().st_size < 100 * 1024 * 1024:
+        print(f"[!] Removing corrupt/incomplete SAM 2.1 checkpoint file ({SAM2_CHECKPOINT.stat().st_size} bytes)...", flush=True)
+        try:
+            SAM2_CHECKPOINT.unlink()
+        except Exception:
+            pass
+
+    if GROUNDING_DINO_CHECKPOINT.exists() and GROUNDING_DINO_CHECKPOINT.stat().st_size < 500 * 1024 * 1024:
+        print(f"[!] Removing corrupt/incomplete Grounding DINO checkpoint file ({GROUNDING_DINO_CHECKPOINT.stat().st_size} bytes)...", flush=True)
+        try:
+            GROUNDING_DINO_CHECKPOINT.unlink()
+        except Exception:
+            pass
+
+    if not SAM2_CHECKPOINT.exists():
         _fallback_sam2 = Path(r"C:\Users\Lenovo\Downloads\analyze\Grounded-SAM-2-main\sam2.1_hiera_tiny.pt")
-        if _fallback_sam2.exists() and _fallback_sam2.stat().st_size > 50_000_000:
+        if _fallback_sam2.exists() and _fallback_sam2.stat().st_size >= 100 * 1024 * 1024:
             SAM2_CHECKPOINT = _fallback_sam2
 
-    if not GROUNDING_DINO_CHECKPOINT.exists() or GROUNDING_DINO_CHECKPOINT.stat().st_size < 300_000_000:
+    if not GROUNDING_DINO_CHECKPOINT.exists():
         _fallback_gdino = Path(r"C:\Users\Lenovo\Downloads\analyze\Grounded-SAM-2-main\gdino_checkpoints\groundingdino_swint_ogc.pth")
-        if _fallback_gdino.exists() and _fallback_gdino.stat().st_size > 300_000_000:
+        if _fallback_gdino.exists() and _fallback_gdino.stat().st_size >= 500 * 1024 * 1024:
             GROUNDING_DINO_CHECKPOINT = _fallback_gdino
 
     def _bg_download():
         global SAM2_CHECKPOINT, GROUNDING_DINO_CHECKPOINT
-        target_sam2 = BASE_DIR / "sam2.1_hiera_tiny.pt"
-        if not target_sam2.exists() or target_sam2.stat().st_size < 50_000_000:
+        if not SAM2_CHECKPOINT.exists() or SAM2_CHECKPOINT.stat().st_size < 100 * 1024 * 1024:
             print("[*] Downloading SAM 2.1 Hiera Tiny checkpoint...", flush=True)
             sam2_url = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt"
-            temp_sam2 = BASE_DIR / "sam2.1_hiera_tiny.pt.tmp"
+            target_path = BASE_DIR / "sam2.1_hiera_tiny.pt"
             try:
-                download_file_gil_friendly(sam2_url, temp_sam2)
-                if temp_sam2.exists() and temp_sam2.stat().st_size > 50_000_000:
-                    temp_sam2.replace(target_sam2)
-                    SAM2_CHECKPOINT = target_sam2
-                    print(f"[+] Downloaded SAM 2.1 checkpoint to {target_sam2}", flush=True)
+                download_file_gil_friendly(sam2_url, target_path, min_bytes=100*1024*1024)
+                SAM2_CHECKPOINT = target_path
+                print(f"[+] Downloaded SAM 2.1 checkpoint to {target_path}", flush=True)
             except Exception as e:
                 print(f"[!] Error downloading SAM 2 checkpoint: {e}", flush=True)
 
-        gdino_dir = BASE_DIR / "gdino_checkpoints"
-        target_gdino = gdino_dir / "groundingdino_swint_ogc.pth"
-        if not target_gdino.exists() or target_gdino.stat().st_size < 300_000_000:
+        if not GROUNDING_DINO_CHECKPOINT.exists() or GROUNDING_DINO_CHECKPOINT.stat().st_size < 500 * 1024 * 1024:
             print("[*] Downloading Grounding DINO Swin-T checkpoint...", flush=True)
             gdino_url = "https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
+            gdino_dir = BASE_DIR / "gdino_checkpoints"
             gdino_dir.mkdir(parents=True, exist_ok=True)
-            temp_gdino = gdino_dir / "groundingdino_swint_ogc.pth.tmp"
+            target_path = gdino_dir / "groundingdino_swint_ogc.pth"
             try:
-                download_file_gil_friendly(gdino_url, temp_gdino)
-                if temp_gdino.exists() and temp_gdino.stat().st_size > 300_000_000:
-                    temp_gdino.replace(target_gdino)
-                    GROUNDING_DINO_CHECKPOINT = target_gdino
-                    print(f"[+] Downloaded Grounding DINO checkpoint to {target_gdino}", flush=True)
+                download_file_gil_friendly(gdino_url, target_path, min_bytes=500*1024*1024)
+                GROUNDING_DINO_CHECKPOINT = target_path
+                print(f"[+] Downloaded Grounding DINO checkpoint to {target_path}", flush=True)
             except Exception as e:
                 print(f"[!] Error downloading Grounding DINO checkpoint: {e}", flush=True)
 
@@ -566,60 +583,54 @@ class MultiInstanceInspectionAgent:
                  gdino_config=GROUNDING_DINO_CONFIG, gdino_checkpoint=GROUNDING_DINO_CHECKPOINT,
                  device=DEVICE):
         self.device = device
-        self.sam2_config = sam2_config
-        self.sam2_checkpoint = sam2_checkpoint
-        self.gdino_config = gdino_config
-        self.gdino_checkpoint = gdino_checkpoint
+        self.sam2_checkpoint = Path(sam2_checkpoint)
+        self.sam2_config = str(sam2_config)
+        self.gdino_config = str(gdino_config)
+        self.gdino_checkpoint = Path(gdino_checkpoint)
         
         self.sam2_model = None
         self.sam2_predictor = None
         self.grounding_model = None
+        self._load_lock = threading.Lock()
         
         print(f"[*] Initializing Dynamic Multi-Category AI Inspection Agent on {self.device}...")
-        self.try_load_models()
+        self._ensure_models_loaded()
         print("[+] Vision AI Agent initialized and operational.\n", flush=True)
 
-    def try_load_models(self):
-        try:
-            # Safely attempt SAM 2 model initialization
-            sam2_p = Path(self.sam2_checkpoint)
-            if self.sam2_predictor is None and sam2_p.exists():
-                try:
-                    if sam2_p.stat().st_size > 50_000_000:
+    def _ensure_models_loaded(self):
+        """Thread-safe dynamic lazy loader for SAM 2.1 & Grounding DINO checkpoints."""
+        with self._load_lock:
+            # Check SAM 2
+            if self.sam2_predictor is None and self.sam2_checkpoint.exists():
+                size = self.sam2_checkpoint.stat().st_size
+                if size >= 100 * 1024 * 1024:
+                    try:
                         print("  -> Loading SAM 2.1 Model...", flush=True)
-                        self.sam2_model = build_sam2(str(self.sam2_config), str(sam2_p), device=self.device)
+                        self.sam2_model = build_sam2(self.sam2_config, str(self.sam2_checkpoint), device=self.device)
                         self.sam2_predictor = SAM2ImagePredictor(self.sam2_model)
                         print("  [+] SAM 2.1 Model loaded successfully.", flush=True)
-                except Exception as e:
-                    print(f"  [!] SAM 2 model load note (using OpenCV segmentation fallback): {e}", flush=True)
-                    self.sam2_model = None
-                    self.sam2_predictor = None
-                
-            # Safely attempt Grounding DINO model initialization
-            gdino_p = Path(self.gdino_checkpoint)
-            if self.grounding_model is None and gdino_p.exists():
-                try:
-                    if gdino_p.stat().st_size > 300_000_000:
+                    except Exception as e:
+                        print(f"  [!] SAM 2 model load note (using OpenCV segmentation fallback): {e}", flush=True)
+
+            # Check Grounding DINO
+            if self.grounding_model is None and self.gdino_checkpoint.exists():
+                size = self.gdino_checkpoint.stat().st_size
+                if size >= 500 * 1024 * 1024:
+                    try:
                         print("  -> Loading Grounding DINO Model...", flush=True)
                         self.grounding_model = load_model(
-                            model_config_path=str(self.gdino_config),
-                            model_checkpoint_path=str(gdino_p),
+                            model_config_path=self.gdino_config,
+                            model_checkpoint_path=str(self.gdino_checkpoint),
                             device=self.device,
                         )
                         print("  [+] Grounding DINO Model loaded successfully.", flush=True)
-                except Exception as e:
-                    print(f"  [!] Grounding DINO model load note (using OpenCV vision fallback): {e}", flush=True)
-                    self.grounding_model = None
-        except Exception as outer_err:
-            print(f"  [!] try_load_models note (vision analytical engine operational): {outer_err}", flush=True)
-            self.sam2_predictor = None
-            self.grounding_model = None
+                    except Exception as e:
+                        print(f"  [!] Grounding DINO model load note (using OpenCV vision fallback): {e}", flush=True)
 
     def analyze_image_file(self, image_path_or_bytes, filename="uploaded_image.jpg", category_override="auto", location_payload=None):
         """Run complete 7-stage hierarchical inspection with fast CPU inference, radiothermal anomaly mapping, and location context."""
         import hashlib
-        
-        self.try_load_models()
+        self._ensure_models_loaded()
         
         # 1. Load image from path or memory buffer and compute hash for instant cache
         if isinstance(image_path_or_bytes, (str, Path)):
@@ -2391,32 +2402,14 @@ def create_scan_job(filename, category_override="auto", location_payload=None, i
 
         except Exception as ex:
             import traceback
-            err_text = f"Scan execution note: {str(ex)}"
-            print(f"[ERROR] Job {job_id} notice: {err_text}, executing vision analytics fallback...")
+            err_text = f"Scan failed at Stage {SCAN_JOBS.get(job_id, {}).get('stage', 1)}: {str(ex)}"
+            print(f"[ERROR] Job {job_id} failed: {err_text}")
             traceback.print_exc()
-            try:
-                agent = get_ai_agent()
-                agent.sam2_predictor = None
-                agent.grounding_model = None
-                fallback_results = agent.analyze_image_file(
-                    img_bytes if 'img_bytes' in locals() and img_bytes else b"",
-                    filename=filename,
-                    category_override=category_override,
-                    location_payload=location_payload
-                )
-                print(f"[SCAN] Job completed with vision analytics fallback: {job_id}")
-                with SCAN_JOBS_LOCK:
-                    if job_id in SCAN_JOBS:
-                        SCAN_JOBS[job_id]["status"] = "completed"
-                        SCAN_JOBS[job_id]["result"] = fallback_results
-                        SCAN_JOBS[job_id]["updated_at"] = time.time()
-            except Exception as ex2:
-                print(f"[CRITICAL] Scan fallback error: {ex2}")
-                with SCAN_JOBS_LOCK:
-                    if job_id in SCAN_JOBS:
-                        SCAN_JOBS[job_id]["status"] = "failed"
-                        SCAN_JOBS[job_id]["error"] = f"Scan failed: {str(ex2)}"
-                        SCAN_JOBS[job_id]["updated_at"] = time.time()
+            with SCAN_JOBS_LOCK:
+                if job_id in SCAN_JOBS:
+                    SCAN_JOBS[job_id]["status"] = "failed"
+                    SCAN_JOBS[job_id]["error"] = err_text
+                    SCAN_JOBS[job_id]["updated_at"] = time.time()
 
     threading.Thread(target=_worker, daemon=True).start()
     return job_id
@@ -2628,7 +2621,27 @@ class InspectionRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json(404, {"success": False, "status": "failed", "error": f"API endpoint not found: {parsed.path}"})
                 return
 
-            # Serve static web files
+            # Serve static web files & SPA page routing fallback for user pages (login, signup, dashboard, etc.)
+            req_path_clean = parsed.path.lstrip("/")
+            target_file = (WEB_DIR / req_path_clean).resolve()
+            
+            # If requesting a route without file extension that does not correspond to an existing physical file, serve index.html
+            if req_path_clean and not target_file.is_file() and not Path(parsed.path).suffix:
+                index_file = WEB_DIR / "index.html"
+                if index_file.is_file():
+                    try:
+                        with open(index_file, "rb") as f:
+                            html_bytes = f.read()
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/html; charset=utf-8")
+                        self.send_header("Content-Length", str(len(html_bytes)))
+                        self.send_header("Cache-Control", "no-cache")
+                        self.end_headers()
+                        self.wfile.write(html_bytes)
+                        return
+                    except Exception as e:
+                        print(f"[!] SPA routing fallback error for {parsed.path}: {e}")
+
             super().do_GET()
         except Exception as e:
             import traceback
@@ -4133,8 +4146,7 @@ def prewarm_sample_cache():
 
 def run_server(port=None):
     if port is None:
-        default_port = 7860 if (os.environ.get("SPACE_ID") or os.environ.get("HF_SPACE_ID")) else 10000
-        port = int(os.environ.get("PORT", default_port))
+        port = int(os.environ.get("PORT", 10000))
     host = "0.0.0.0"
     print("=" * 70)
     print(" AI INFRASTRUCTURE INSPECTION AGENT - WEB SERVER & CV ENGINE")
@@ -4168,4 +4180,5 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=default_port, help="Port to serve web interface on")
     args = parser.parse_args()
     run_server(port=args.port)
+
 
